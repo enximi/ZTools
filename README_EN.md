@@ -356,6 +356,14 @@ When submitting an issue, please include:
 
 This project is licensed under the [MIT License](./LICENSE).
 
+## 💖 Sponsor
+
+If ZTools has been helpful to you, consider sponsoring the project on Afdian to support continued development:
+
+<a href="https://afdian.com/a/ZTools">
+  <img src="https://img.shields.io/badge/Afdian-Sponsor-946ce6?style=for-the-badge" alt="Afdian">
+</a>
+
 ## 💝 Acknowledgments
 
 - [uTools](https://u.tools/) - Source of inspiration

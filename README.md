@@ -356,6 +356,14 @@ pnpm build:unpack       # 打包但不生成安装包（调试用）
 
 本项目采用 [MIT License](./LICENSE) 许可证。
 
+## 💖 赞助支持
+
+如果 ZTools 对你有帮助，欢迎通过爱发电赞助支持项目的持续开发：
+
+<a href="https://afdian.com/a/ZTools">
+  <img src="https://img.shields.io/badge/爱发电-赞助支持-946ce6?style=for-the-badge" alt="爱发电">
+</a>
+
 ## 💝 致谢
 
 - [uTools](https://u.tools/) - 灵感来源
