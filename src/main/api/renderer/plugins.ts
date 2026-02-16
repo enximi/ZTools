@@ -239,6 +239,8 @@ export class PluginsAPI {
         title: pluginConfig.title,
         version: pluginConfig.version,
         description: pluginConfig.description || '',
+        author: pluginConfig.author || '',
+        homepage: pluginConfig.homepage || '',
         logo: pluginConfig.logo ? pathToFileURL(path.join(pluginPath, pluginConfig.logo)).href : '',
         main: pluginConfig.main,
         preload: pluginConfig.preload,
@@ -466,6 +468,8 @@ export class PluginsAPI {
         title: pluginConfig.title,
         version: pluginConfig.version,
         description: pluginConfig.description || '',
+        author: pluginConfig.author || '',
+        homepage: pluginConfig.homepage || '',
         logo: pluginConfig.logo ? pathToFileURL(path.join(pluginPath, pluginConfig.logo)).href : '',
         main: pluginConfig?.development?.main,
         preload: pluginConfig.preload,
@@ -594,6 +598,8 @@ export class PluginsAPI {
         name: pluginConfig.name || oldPlugin.name,
         version: pluginConfig.version || oldPlugin.version,
         description: pluginConfig.description || oldPlugin.description,
+        author: pluginConfig.author ?? oldPlugin.author,
+        homepage: pluginConfig.homepage ?? oldPlugin.homepage,
         logo: pluginConfig.logo
           ? pathToFileURL(path.join(pluginPath, pluginConfig.logo)).href
           : oldPlugin.logo,
