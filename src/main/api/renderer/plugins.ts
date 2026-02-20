@@ -194,7 +194,31 @@ export class PluginsAPI {
     return { valid: true }
   }
 
-  // 导入ZIP插件
+  /**
+   * 选择插件文件（不安装，仅返回文件路径）
+   * 用于导入本地插件时先预览再安装
+   * 注意：此方法通过 internal:select-plugin-file 调用
+   */
+  public async selectPluginFile(): Promise<any> {
+    try {
+      const result = await dialog.showOpenDialog(this.mainWindow!, {
+        title: '选择插件文件',
+        filters: [{ name: '插件文件', extensions: ['zip', 'tool-plugin'] }],
+        properties: ['openFile']
+      })
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, error: '未选择文件' }
+      }
+
+      return { success: true, filePath: result.filePaths[0] }
+    } catch (error: unknown) {
+      console.error('[Plugins] 选择插件文件失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  }
+
+  // 导入ZIP插件（保留用于兼容性，直接安装不预览）
   private async importPlugin(): Promise<any> {
     try {
       const result = await dialog.showOpenDialog(this.mainWindow!, {

@@ -143,6 +143,7 @@ onMounted(() => {
     :install-plugin-file-path="installPluginFilePath"
     :add-dev-plugin-file-path="addDevPluginFilePath"
     :auto-open-plugin-name="autoOpenPluginName"
+    @update:install-plugin-file-path="installPluginFilePath = $event"
     @auto-open-consumed="autoOpenPluginName = ''"
     @add-dev-consumed="addDevPluginFilePath = ''"
   />

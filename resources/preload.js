@@ -439,6 +439,7 @@ window.ztools = {
     // ==================== 插件管理 API ====================
     getPlugins: async () => await electron.ipcRenderer.invoke('internal:get-plugins'),
     getAllPlugins: async () => await electron.ipcRenderer.invoke('internal:get-all-plugins'),
+    selectPluginFile: async () => await electron.ipcRenderer.invoke('internal:select-plugin-file'),
     importPlugin: async () => await electron.ipcRenderer.invoke('internal:import-plugin'),
     readPluginInfoFromZip: async (zipPath) =>
       await electron.ipcRenderer.invoke('internal:read-plugin-info-from-zip', zipPath),

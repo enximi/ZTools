@@ -214,6 +214,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'auto-open-consumed'): void
   (e: 'add-dev-consumed'): void
+  (e: 'navigate', page: string, params?: Record<string, string>): void
 }>()
 
 const { success, error, confirm } = useToast()
@@ -282,23 +283,23 @@ function isPluginRunning(pluginPath: string): boolean {
   return runningPlugins.value.includes(pluginPath)
 }
 
-// 导入本地插件
+// 导入本地插件（选择文件后跳转到预览页面）
 async function importPlugin(): Promise<void> {
   if (isImporting.value) return
 
   isImporting.value = true
   try {
-    const result = await window.ztools.internal.importPlugin()
-    if (result.success) {
-      // 重新加载插件列表
-      await loadPlugins()
-      success('插件导入成功!')
-    } else {
-      error(`插件导入失败: ${result.error}`)
+    // 仅选择文件，不直接安装
+    const result = await window.ztools.internal.selectPluginFile()
+    if (result.success && result.filePath) {
+      // 通知父组件切换到安装预览页面
+      emit('navigate', 'install-plugin', { filePath: result.filePath })
+    } else if (result.error && result.error !== '未选择文件') {
+      error(`选择插件文件失败: ${result.error}`)
     }
   } catch (err: any) {
-    console.error('导入插件失败:', err)
-    error(`导入插件失败: ${err.message || '未知错误'}`)
+    console.error('选择插件文件失败:', err)
+    error(`选择插件文件失败: ${err.message || '未知错误'}`)
   } finally {
     isImporting.value = false
   }

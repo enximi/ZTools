@@ -60,14 +60,19 @@
       </div>
 
       <!-- 已安装提示 -->
-      <div v-if="pluginInfo.isInstalled" class="installed-tip">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
-            fill="currentColor"
-          />
-        </svg>
-        <span>该插件已安装</span>
+      <div v-if="pluginInfo.isInstalled" class="installed-warning">
+        <div class="warning-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <div class="warning-content">
+          <div class="warning-title">该插件已安装</div>
+          <div class="warning-desc">继续安装将覆盖已有版本，插件数据会保留</div>
+        </div>
       </div>
 
       <!-- 安装按钮 -->
@@ -104,7 +109,12 @@
           </div>
           <div class="dialog-content">
             <p class="dialog-message">
-              即将安装第三方插件「{{ pluginInfo?.title || pluginInfo?.name }}」。
+              即将{{ pluginInfo?.isInstalled ? '覆盖安装' : '安装' }}第三方插件「{{
+                pluginInfo?.title || pluginInfo?.name
+              }}」。
+            </p>
+            <p v-if="pluginInfo?.isInstalled" class="dialog-message dialog-info-text">
+              覆盖安装会替换插件文件，但会保留插件数据。
             </p>
             <p class="dialog-message dialog-warning-text">
               第三方插件可能包含恶意代码，存在隐私泄露、数据损坏等安全风险。请仅安装来自可信来源的插件。
@@ -190,8 +200,9 @@ async function confirmInstall(): Promise<void> {
     const result = await window.ztools.internal.installPluginFromPath(props.filePath)
     if (result.success) {
       const wasInstalled = pluginInfo.value?.isInstalled
-      success(wasInstalled ? '插件覆盖安装成功' : '插件安装成功')
-      // 跳转到插件详情
+      const actionText = wasInstalled ? '覆盖安装' : '安装'
+      success(`插件${actionText}成功`)
+      // 跳转到插件中心并打开插件详情
       if (pluginInfo.value) {
         emit('installed', pluginInfo.value.name)
       }
@@ -375,17 +386,38 @@ async function confirmInstall(): Promise<void> {
 }
 
 /* 已安装提示 */
-.installed-tip {
+.installed-warning {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--success-light-bg);
-  border: 1px solid var(--success-border);
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--warning-light-bg);
+  border: 1px solid color-mix(in srgb, var(--warning-color), transparent 70%);
   border-radius: 10px;
   margin-bottom: 16px;
-  color: var(--success-color);
+}
+
+.warning-icon {
+  flex-shrink: 0;
+  color: var(--warning-color);
+  margin-top: 2px;
+}
+
+.warning-content {
+  flex: 1;
+}
+
+.warning-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--warning-color);
+  margin-bottom: 4px;
+}
+
+.warning-desc {
   font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 /* 安装按钮 */
@@ -505,6 +537,14 @@ async function confirmInstall(): Promise<void> {
 .dialog-warning-text {
   color: var(--danger-color);
   font-weight: 500;
+}
+
+.dialog-info-text {
+  color: var(--text-color);
+  background: var(--control-bg);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--control-border);
 }
 
 .dialog-footer {

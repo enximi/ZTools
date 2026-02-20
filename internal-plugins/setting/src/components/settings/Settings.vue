@@ -27,6 +27,7 @@
         :auto-open-plugin-name="autoOpenPluginName"
         @auto-open-consumed="handleAutoOpenConsumed"
         @add-dev-consumed="handleAddDevConsumed"
+        @navigate="handleNavigateFromPluginCenter"
       />
 
       <!-- 插件市场 -->
@@ -111,6 +112,7 @@ const emit = defineEmits<{
   'update:activePage': [value: string]
   'auto-open-consumed': []
   'add-dev-consumed': []
+  'update:installPluginFilePath': [value: string]
 }>()
 
 // 菜单项类型
@@ -205,8 +207,19 @@ function handleNavigate(page: string, params?: Record<string, string>): void {
   activeMenu.value = page
 }
 
+// 处理 PluginCenter 的导航请求
+function handleNavigateFromPluginCenter(page: string, params?: Record<string, string>): void {
+  if (page === 'install-plugin' && params?.filePath) {
+    // 更新文件路径并切换到安装页面
+    emit('update:installPluginFilePath', params.filePath)
+    activeMenu.value = page
+  }
+}
+
 // 插件安装成功后跳转到插件中心并打开详情
 function handlePluginInstalled(pluginName: string): void {
+  // 清空文件路径
+  emit('update:installPluginFilePath', '')
   autoOpenPluginName.value = pluginName
   activeMenu.value = 'plugins'
 }

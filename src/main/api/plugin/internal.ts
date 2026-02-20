@@ -103,6 +103,13 @@ export class InternalPluginAPI {
       return await (pluginsAPI as any).getAllPlugins()
     })
 
+    ipcMain.handle('internal:select-plugin-file', async (event) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:select-plugin-file')
+      }
+      return await (pluginsAPI as any).selectPluginFile()
+    })
+
     ipcMain.handle('internal:import-plugin', async (event) => {
       if (!requireInternalPlugin(this.pluginManager, event)) {
         throw new PermissionDeniedError('internal:import-plugin')

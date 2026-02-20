@@ -50,6 +50,7 @@ declare global {
           }>
         >
         getRunningPlugins: () => Promise<string[]>
+        selectPluginFile: () => Promise<{ success: boolean; filePath?: string; error?: string }>
         importPlugin: () => Promise<{ success: boolean; error?: string }>
         readPluginInfoFromZip: (zipPath: string) => Promise<{
           success: boolean
