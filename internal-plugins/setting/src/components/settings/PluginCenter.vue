@@ -68,7 +68,7 @@
                 <button
                   class="more-menu-item"
                   :disabled="isImportingNpm"
-                  @click="showNpmInstallDialog"
+                  @click="showNpmInstallPanel"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -260,7 +260,7 @@
     <!-- 插件详情覆盖面板组件 -->
     <Transition name="slide">
       <PluginDetail
-        v-if="isDetailVisible && selectedPlugin"
+        v-if="isDetailVisible && selectedPlugin && !showNpmPanel"
         :plugin="selectedPlugin"
         :is-running="isPluginRunning(selectedPlugin.path)"
         @back="closePluginDetail"
@@ -273,62 +273,16 @@
       />
     </Transition>
 
-    <!-- npm 安装弹窗 -->
-    <Teleport to="body">
-      <div v-if="showNpmDialog" class="npm-dialog-overlay" @click.self="closeNpmDialog">
-        <div class="npm-dialog">
-          <div class="npm-dialog-header">
-            <h3>从 npm 安装插件</h3>
-            <button class="close-btn" @click="closeNpmDialog">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-          <div class="npm-dialog-body">
-            <div class="input-group">
-              <label>npm 包名</label>
-              <input
-                v-model="npmPackageName"
-                type="text"
-                class="input"
-                placeholder="例如：@ztools/example-plugin 或 ztools-example"
-                @keyup.enter="installFromNpm"
-              />
-              <p class="input-hint">请输入 npm 包名，支持作用域包（@scope/name）</p>
-            </div>
-            <div class="checkbox-group">
-              <label class="checkbox-label">
-                <input v-model="useChinaMirror" type="checkbox" class="checkbox" />
-                <span>使用国内镜像（registry.npmmirror.com）</span>
-              </label>
-              <p class="input-hint">国内网络环境下推荐使用，可提高下载速度</p>
-            </div>
-          </div>
-          <div class="npm-dialog-footer">
-            <button class="btn" @click="closeNpmDialog">取消</button>
-            <button
-              class="btn btn-solid"
-              :disabled="!npmPackageName.trim() || isImportingNpm"
-              @click="installFromNpm"
-            >
-              {{ isImportingNpm ? '安装中...' : '安装' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- npm 安装面板 -->
+    <Transition name="slide">
+      <NpmInstallPanel
+        v-if="showNpmPanel"
+        ref="npmInstallPanelRef"
+        :visible="showNpmPanel"
+        @back="closeNpmPanel"
+        @install="handleInstallFromNpm"
+      />
+    </Transition>
   </div>
 </template>
 
@@ -339,6 +293,7 @@ import { weightedSearch } from '../../utils/weightedSearch'
 import AdaptiveIcon from '../common/AdaptiveIcon.vue'
 import Icon from '../common/Icon.vue'
 import PluginDetail from './PluginDetail.vue'
+import NpmInstallPanel from './NpmInstallPanel.vue'
 
 const props = defineProps<{
   searchQuery?: string
@@ -367,14 +322,13 @@ const isReloading = ref(false)
 const isPackaging = ref(false)
 
 // npm 安装相关状态
-const showNpmDialog = ref(false)
-const npmPackageName = ref('')
-const useChinaMirror = ref(false)
+const showNpmPanel = ref(false)
 const showMoreMenu = ref(false)
 
 // 详情弹窗状态
 const isDetailVisible = ref(false)
 const selectedPlugin = ref<any | null>(null)
+const npmInstallPanelRef = ref<InstanceType<typeof NpmInstallPanel>>()
 
 // 过滤状态
 const filterStatus = ref<'all' | 'running'>('all')
@@ -693,9 +647,9 @@ async function handlePackagePlugin(plugin: any): Promise<void> {
 // 处理 ESC 按键
 function handleKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
-    if (showNpmDialog.value) {
+    if (showNpmPanel.value) {
       e.stopPropagation()
-      closeNpmDialog()
+      closeNpmPanel()
     } else if (showMoreMenu.value) {
       e.stopPropagation()
       showMoreMenu.value = false
@@ -786,20 +740,17 @@ function closePluginDetail(): void {
   selectedPlugin.value = null
 }
 
-// 显示 npm 安装弹窗
-function showNpmInstallDialog(): void {
-  npmPackageName.value = ''
-  useChinaMirror.value = false
-  showNpmDialog.value = true
+// 显示 npm 安装面板
+function showNpmInstallPanel(): void {
+  showNpmPanel.value = true
   showMoreMenu.value = false
 }
 
-// 关闭 npm 安装弹窗
-function closeNpmDialog(): void {
+// 关闭 npm 安装面板
+function closeNpmPanel(): void {
   if (isImportingNpm.value) return
-  showNpmDialog.value = false
-  npmPackageName.value = ''
-  useChinaMirror.value = false
+  showNpmPanel.value = false
+  npmInstallPanelRef.value?.resetForm()
 }
 
 // 切换更多菜单
@@ -817,25 +768,27 @@ function closeMoreMenu(event?: Event): void {
 }
 
 // 从 npm 安装插件
-async function installFromNpm(): Promise<void> {
-  const packageName = npmPackageName.value.trim()
-  if (!packageName || isImportingNpm.value) return
+async function handleInstallFromNpm(data: {
+  packageName: string
+  useChinaMirror: boolean
+}): Promise<void> {
+  if (isImportingNpm.value) return
 
   isImportingNpm.value = true
   try {
     const result = await window.ztools.internal.installPluginFromNpm({
-      packageName,
-      useChinaMirror: useChinaMirror.value
+      packageName: data.packageName,
+      useChinaMirror: data.useChinaMirror
     })
     if (result.success) {
-      // 先设置加载状态为 false，这样 closeNpmDialog 才能正常关闭
+      // 先设置加载状态为 false，这样 closeNpmPanel 才能正常关闭
       isImportingNpm.value = false
       // 重新加载插件列表
       await loadPlugins()
-      // 关闭弹窗
-      closeNpmDialog()
+      // 关闭面板
+      closeNpmPanel()
       // 显示成功提示
-      success(`插件 "${packageName}" 安装成功！`)
+      success(`插件 "${data.packageName}" 安装成功！`)
     } else {
       error(`安装失败: ${result.error}`)
     }
@@ -1152,121 +1105,6 @@ async function installFromNpm(): Promise<void> {
 .empty-feature {
   font-size: 13px;
   color: var(--text-secondary);
-}
-
-/* npm 安装弹窗样式 */
-.npm-dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  backdrop-filter: blur(8px);
-}
-
-.npm-dialog {
-  background: var(--card-bg);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--divider-color);
-  width: 500px;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.npm-dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--divider-color);
-}
-
-.npm-dialog-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-color);
-}
-
-.close-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background: var(--hover-bg);
-  color: var(--text-color);
-}
-
-.npm-dialog-body {
-  padding: 24px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.input-group label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-color);
-}
-
-.input-hint {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.checkbox-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--text-color);
-  cursor: pointer;
-}
-
-.checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--primary-color);
-}
-
-.npm-dialog-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--divider-color);
 }
 
 /* 更多菜单样式 */
