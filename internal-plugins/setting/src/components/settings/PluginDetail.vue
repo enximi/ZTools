@@ -819,11 +819,15 @@ const canUpgrade = computed(() => {
   return compareVersions(props.plugin.localVersion, props.plugin.version) < 0
 })
 
-// 处理卸载
-function handleUninstall(): void {
-  const confirmed = window.confirm(
-    `确定要卸载插件"${props.plugin.name}"吗？\n\n卸载后将删除插件文件和相关数据，此操作不可恢复。`
-  )
+// 处理卸载（与列表删除使用相同的自定义确认弹窗）
+async function handleUninstall(): Promise<void> {
+  const confirmed = await confirm({
+    title: '删除插件',
+    message: `确定要删除插件"${props.plugin.name}"吗？\n\n此操作将删除插件文件，无法恢复。`,
+    type: 'danger',
+    confirmText: '删除',
+    cancelText: '取消'
+  })
   if (confirmed) {
     emit('uninstall')
   }

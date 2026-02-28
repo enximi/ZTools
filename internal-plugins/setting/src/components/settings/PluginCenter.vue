@@ -499,7 +499,7 @@ async function handleDeletePlugin(plugin: any): Promise<void> {
   }
 }
 
-// 从详情页面卸载插件
+// 从详情页面卸载插件（确认弹窗在 PluginDetail 中已展示，此处直接执行删除）
 async function handleUninstallFromDetail(plugin: any): Promise<void> {
   if (isDeleting.value) return
 
