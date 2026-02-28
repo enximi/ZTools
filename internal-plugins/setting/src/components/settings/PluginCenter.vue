@@ -209,10 +209,10 @@
                 </svg>
               </button>
               <button
-                class="icon-btn delete-btn"
-                title="删除插件"
-                :disabled="isDeleting"
-                @click.stop="handleDeletePlugin(plugin)"
+                class="icon-btn pin-btn"
+                :class="{ 'is-pinned': isPluginPinned(plugin.path) }"
+                :title="isPluginPinned(plugin.path) ? '取消置顶' : '置顶'"
+                @click.stop="togglePin(plugin)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -225,12 +225,9 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path
-                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                  ></path>
-                  <line x1="10" y1="11" x2="10" y2="17"></line>
-                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                  <line x1="4" y1="4" x2="20" y2="4"></line>
+                  <polyline points="8 10 12 4 16 10"></polyline>
+                  <line x1="12" y1="10" x2="12" y2="20"></line>
                 </svg>
               </button>
             </div>
@@ -332,6 +329,10 @@ const npmInstallPanelRef = ref<InstanceType<typeof NpmInstallPanel>>()
 // 过滤状态
 const filterStatus = ref<'all' | 'running'>('all')
 
+// 置顶列表（插件 path 有序数组，持久化到 db）
+const PINNED_PLUGINS_KEY = 'plugin-center-pinned'
+const pinnedPluginPaths = ref<string[]>([])
+
 // 先进行搜索过滤（不考虑运行状态）
 const searchFilteredPlugins = computed(() => {
   return weightedSearch(plugins.value, props.searchQuery || '', [
@@ -348,13 +349,42 @@ const runningPluginsCount = computed(() => {
   return searchFilteredPlugins.value.filter((p) => isPluginRunning(p.path)).length
 })
 
-// 最终显示的插件列表（根据状态过滤）
+// 最终显示的插件列表（根据状态过滤，置顶的排在最前）
 const filteredPlugins = computed(() => {
-  if (filterStatus.value === 'running') {
-    return searchFilteredPlugins.value.filter((p) => isPluginRunning(p.path))
-  }
-  return searchFilteredPlugins.value
+  let list =
+    filterStatus.value === 'running'
+      ? searchFilteredPlugins.value.filter((p) => isPluginRunning(p.path))
+      : searchFilteredPlugins.value
+  const pinnedOrder = pinnedPluginPaths.value
+  if (pinnedOrder.length === 0) return list
+  const pinnedSet = new Set(pinnedOrder)
+  const pinnedItems = pinnedOrder
+    .map((path) => list.find((p) => p.path === path))
+    .filter(Boolean) as typeof list
+  const unpinnedItems = list.filter((p) => !pinnedSet.has(p.path))
+  return [...pinnedItems, ...unpinnedItems]
 })
+
+function isPluginPinned(pluginPath: string): boolean {
+  return pinnedPluginPaths.value.includes(pluginPath)
+}
+
+async function togglePin(plugin: any): Promise<void> {
+  const path = plugin.path
+  const idx = pinnedPluginPaths.value.indexOf(path)
+  if (idx >= 0) {
+    pinnedPluginPaths.value = pinnedPluginPaths.value.filter((p) => p !== path)
+  } else {
+    pinnedPluginPaths.value = [path, ...pinnedPluginPaths.value]
+  }
+  try {
+    // 将 Vue 响应式数组转换为普通数组，避免 IPC 克隆错误
+    const plainArray = [...pinnedPluginPaths.value]
+    await window.ztools.internal.dbPut(PINNED_PLUGINS_KEY, plainArray)
+  } catch (e) {
+    console.error('保存置顶列表失败:', e)
+  }
+}
 
 // 加载插件列表
 async function loadPlugins(): Promise<void> {
@@ -669,6 +699,12 @@ function handleClickOutside(e: MouseEvent): void {
 
 // 初始化时加载插件列表
 onMounted(async () => {
+  try {
+    const data = await window.ztools.internal.dbGet(PINNED_PLUGINS_KEY)
+    pinnedPluginPaths.value = Array.isArray(data) ? data : []
+  } catch (e) {
+    console.error('加载置顶列表失败:', e)
+  }
   await loadPlugins()
   // 如果有需要自动打开的插件，加载完成后打开详情
   tryAutoOpenPlugin()
@@ -1068,12 +1104,21 @@ async function handleInstallFromNpm(data: {
   background: var(--primary-light-bg);
 }
 
-.delete-btn {
-  color: var(--danger-color);
+.pin-btn {
+  color: var(--text-secondary);
 }
 
-.delete-btn:hover:not(:disabled) {
-  background: var(--danger-light-bg);
+.pin-btn:hover {
+  background: var(--hover-bg);
+  color: var(--primary-color);
+}
+
+.pin-btn.is-pinned {
+  color: var(--primary-color);
+}
+
+.pin-btn.is-pinned:hover {
+  background: var(--primary-light-bg);
 }
 
 /* 空状态 */
