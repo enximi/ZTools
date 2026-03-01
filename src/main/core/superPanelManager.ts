@@ -654,6 +654,52 @@ class SuperPanelManager {
     ipcMain.on('super-panel-window-commands-result', (_event, data: { results: any[] }) => {
       this.sendToSuperPanel('super-panel-window-commands-data', data)
     })
+
+    // 固定到超级面板
+    ipcMain.handle('super-panel:pin-command', async (_event, command: any) => {
+      try {
+        console.log('[SuperPanel] 收到固定到超级面板请求:', command)
+        let pinnedCommands = await databaseAPI.dbGet('super-panel-pinned')
+        if (!Array.isArray(pinnedCommands)) {
+          pinnedCommands = []
+        }
+
+        // 检查是否已固定（避免重复）
+        const exists = pinnedCommands.some((cmd: any) => {
+          if (command.featureCode) {
+            return cmd.path === command.path && cmd.featureCode === command.featureCode
+          }
+          return cmd.path === command.path && cmd.name === command.name
+        })
+
+        if (exists) {
+          console.log('[SuperPanel] 该指令已固定到超级面板')
+          return { success: true, message: '该指令已固定' }
+        }
+
+        // 添加到固定列表
+        pinnedCommands.push({
+          name: command.name,
+          path: command.path,
+          icon: command.icon,
+          type: command.type,
+          featureCode: command.featureCode,
+          pluginName: command.pluginName,
+          pluginExplain: command.pluginExplain
+        })
+
+        await databaseAPI.dbPut('super-panel-pinned', pinnedCommands)
+        console.log('[SuperPanel] 固定到超级面板成功，当前固定数:', pinnedCommands.length)
+
+        return { success: true }
+      } catch (error) {
+        console.error('[SuperPanel] 固定到超级面板失败:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '未知错误'
+        }
+      }
+    })
   }
 }
 

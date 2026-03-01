@@ -347,6 +347,7 @@ const api = {
     ipcRenderer.invoke('super-panel:update-pinned-order', commands),
   unpinSuperPanelCommand: (path: string, featureCode?: string) =>
     ipcRenderer.invoke('super-panel:unpin-command', path, featureCode),
+  pinToSuperPanel: (command: any) => ipcRenderer.invoke('super-panel:pin-command', command),
   onSuperPanelLaunch: (callback: (data: { command: any; clipboardContent?: any }) => void) => {
     ipcRenderer.on('super-panel-launch', (_event, data) => callback(data))
   },

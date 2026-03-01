@@ -354,6 +354,7 @@ declare global {
         path: string,
         featureCode?: string
       ) => Promise<{ success: boolean; error?: string }>
+      pinToSuperPanel: (command: any) => Promise<{ success: boolean; error?: string; message?: string }>
       onSuperPanelLaunch: (
         callback: (data: { command: any; clipboardContent?: any }) => void
       ) => void

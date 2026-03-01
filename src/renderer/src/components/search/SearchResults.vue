@@ -492,6 +492,18 @@ async function handleAppContextMenu(
       })}`,
       label: '固定到搜索框'
     })
+    menuItems.push({
+      id: `pin-to-super-panel:${JSON.stringify({
+        name: app.name,
+        path: app.path,
+        icon: app.icon,
+        type: app.type,
+        featureCode: app.featureCode,
+        pluginName: app.pluginName,
+        pluginExplain: app.pluginExplain
+      })}`,
+      label: '固定到超级面板'
+    })
   }
 
   // 如果是插件，添加插件设置菜单
@@ -855,6 +867,17 @@ async function handleContextMenuCommand(command: string): Promise<void> {
       console.log('已更新 autoDetachPlugin 配置:', autoDetachPlugins)
     } catch (error: any) {
       console.error('切换自动分离配置失败:', error)
+    }
+  } else if (command.startsWith('pin-to-super-panel:')) {
+    const appJson = command.replace('pin-to-super-panel:', '')
+    try {
+      const app = JSON.parse(appJson)
+      await window.ztools.pinToSuperPanel(app)
+      nextTick(() => {
+        emit('focus-input')
+      })
+    } catch (error) {
+      console.error('固定到超级面板失败:', error)
     }
   }
 }
