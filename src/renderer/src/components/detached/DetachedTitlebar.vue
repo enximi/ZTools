@@ -29,7 +29,6 @@
         type="text"
         class="search-input"
         placeholder="搜索..."
-        @input="handleSearchInput"
         @keydown="handleKeydown"
       />
     </div>
@@ -122,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import AdaptiveIcon from '../common/AdaptiveIcon.vue'
 
 const platform = ref<'darwin' | 'win32'>('darwin')
@@ -138,6 +137,11 @@ const acrylicDarkOpacity = ref(50) // 亚克力暗黑模式透明度（默认 50
 const aiRequestStatus = ref<'idle' | 'sending' | 'receiving'>('idle') // AI 请求状态
 const primaryColor = ref('blue')
 const customColor = ref('#db2777')
+
+// 监听搜索框输入变化，通知插件
+watch(searchQuery, (newValue) => {
+  window.electron.ipcRenderer.send('search-input', newValue)
+})
 
 function getThemeColor(colorName: string, isDark: boolean): string {
   const colors: Record<string, { light: string; dark: string }> = {
@@ -478,11 +482,6 @@ async function showPluginSettings(): Promise<void> {
   }
 }
 
-// 搜索输入
-function handleSearchInput(): void {
-  window.electron.ipcRenderer.send('search-input', searchQuery.value)
-}
-
 // macOS 双击标题栏
 function handleDblClick(): void {
   if (platform.value === 'darwin') {
@@ -497,8 +496,6 @@ function handleKeydown(event: KeyboardEvent): void {
     event.preventDefault()
     if (searchQuery.value.trim()) {
       searchQuery.value = ''
-      // 触发变动回调，通知插件
-      handleSearchInput()
     }
     return
   }
