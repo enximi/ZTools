@@ -216,9 +216,6 @@ app.whenReady().then(() => {
   // 注册全局快捷键
   windowManager.registerShortcut()
 
-  // 创建系统托盘
-  windowManager.createTray()
-
   // 初始化悬浮球（从配置决定是否显示）
   floatingBallManager.init()
 
