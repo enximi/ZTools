@@ -28,70 +28,170 @@
 
         <!-- 快捷键列表 -->
         <div class="shortcut-list">
-          <div v-for="shortcut in filteredShortcuts" :key="shortcut.id" class="card shortcut-item">
-            <div class="shortcut-info">
-              <div class="shortcut-key-display">{{ shortcut.shortcut }}</div>
-              <div class="shortcut-desc">{{ shortcut.target }}</div>
+          <!-- 应用快捷键 tab：先显示自定义快捷键,再显示内置快捷键 -->
+          <template v-if="activeTab === 'app'">
+            <!-- 自定义应用快捷键区域 -->
+            <div class="shortcut-section">
+              <div class="section-title">自定义快捷键</div>
+              <!-- 有自定义快捷键时显示列表 -->
+              <div
+                v-if="filteredShortcuts.length > 0"
+                v-for="shortcut in filteredShortcuts"
+                :key="shortcut.id"
+                class="card shortcut-item"
+              >
+                <div class="shortcut-info">
+                  <div class="shortcut-key-display">{{ shortcut.shortcut }}</div>
+                  <div class="shortcut-desc">{{ shortcut.target }}</div>
+                </div>
+
+                <div class="shortcut-meta">
+                  <button
+                    class="icon-btn edit-btn"
+                    title="编辑"
+                    :disabled="isDeleting"
+                    @click="handleEdit(shortcut)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path
+                        d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                      ></path>
+                    </svg>
+                  </button>
+                  <button
+                    class="icon-btn delete-btn"
+                    title="删除"
+                    :disabled="isDeleting"
+                    @click="handleDelete(shortcut.id)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path
+                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                      ></path>
+                      <line x1="10" y1="11" x2="10" y2="17"></line>
+                      <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <!-- 没有自定义快捷键时显示空状态 -->
+              <div v-else-if="!loading" class="empty-state-inline">
+                <Icon name="keyboard" :size="48" class="empty-icon" />
+                <div class="empty-text-inline">暂无自定义快捷键</div>
+                <div class="empty-hint-inline">点击上方"添加快捷键"按钮创建</div>
+              </div>
             </div>
 
-            <div class="shortcut-meta">
-              <button
-                class="icon-btn edit-btn"
-                title="编辑"
-                :disabled="isDeleting"
-                @click="handleEdit(shortcut)"
+            <!-- 内置快捷键列表 -->
+            <div v-if="builtInAppShortcuts.length > 0" class="shortcut-section">
+              <div class="section-title">内置快捷键</div>
+              <div
+                v-for="shortcut in builtInAppShortcuts"
+                :key="shortcut.id"
+                class="card shortcut-item built-in"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-              <button
-                class="icon-btn delete-btn"
-                title="删除"
-                :disabled="isDeleting"
-                @click="handleDelete(shortcut.id)"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path
-                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                  ></path>
-                  <line x1="10" y1="11" x2="10" y2="17"></line>
-                  <line x1="14" y1="11" x2="14" y2="17"></line>
-                </svg>
-              </button>
+                <div class="shortcut-info">
+                  <div class="shortcut-key-display">{{ shortcut.shortcut }}</div>
+                  <div class="shortcut-desc">{{ shortcut.target }}</div>
+                </div>
+                <div class="shortcut-meta">
+                  <span class="built-in-badge">内置</span>
+                </div>
+              </div>
             </div>
-          </div>
+          </template>
 
-          <!-- 空状态 -->
-          <div v-if="!loading && currentShortcuts.length === 0" class="empty-state">
-            <Icon name="keyboard" :size="64" class="empty-icon" />
-            <div class="empty-text">暂无{{ activeTab === 'global' ? '全局' : '应用' }}快捷键</div>
-            <div class="empty-hint">
-              点击"添加快捷键"来创建你的第一个{{ activeTab === 'global' ? '全局' : '应用' }}快捷键
+          <!-- 全局快捷键 tab：保持原有结构不变 -->
+          <template v-else>
+            <div
+              v-for="shortcut in filteredShortcuts"
+              :key="shortcut.id"
+              class="card shortcut-item"
+            >
+              <div class="shortcut-info">
+                <div class="shortcut-key-display">{{ shortcut.shortcut }}</div>
+                <div class="shortcut-desc">{{ shortcut.target }}</div>
+              </div>
+
+              <div class="shortcut-meta">
+                <button
+                  class="icon-btn edit-btn"
+                  title="编辑"
+                  :disabled="isDeleting"
+                  @click="handleEdit(shortcut)"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+                <button
+                  class="icon-btn delete-btn"
+                  title="删除"
+                  :disabled="isDeleting"
+                  @click="handleDelete(shortcut.id)"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path
+                      d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                    ></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                  </svg>
+                </button>
+              </div>
             </div>
-          </div>
+
+            <!-- 全局快捷键空状态 -->
+            <div v-if="!loading && currentShortcuts.length === 0" class="empty-state">
+              <Icon name="keyboard" :size="64" class="empty-icon" />
+              <div class="empty-text">暂无全局快捷键</div>
+              <div class="empty-hint">点击"添加快捷键"来创建你的第一个全局快捷键</div>
+            </div>
+          </template>
         </div>
       </div>
     </Transition>
@@ -134,6 +234,46 @@ interface GlobalShortcut {
   target: string
   enabled: boolean
 }
+
+// 获取平台信息
+const isMac = ref(false)
+const isWindows = ref(false)
+
+// 固定的应用快捷键（根据平台不同）
+const builtInAppShortcuts = computed<GlobalShortcut[]>(() => {
+  if (isMac.value) {
+    return [
+      {
+        id: 'builtin-settings',
+        shortcut: 'Cmd+,',
+        target: '打开设置',
+        enabled: true
+      },
+      {
+        id: 'builtin-detach',
+        shortcut: 'Cmd+D',
+        target: '分离窗口',
+        enabled: true
+      }
+    ]
+  } else if (isWindows.value) {
+    return [
+      {
+        id: 'builtin-settings',
+        shortcut: 'Ctrl+,',
+        target: '打开设置',
+        enabled: true
+      },
+      {
+        id: 'builtin-detach',
+        shortcut: 'Ctrl+D',
+        target: '分离窗口',
+        enabled: true
+      }
+    ]
+  }
+  return []
+})
 
 // Tab 切换
 const activeTab = ref<'global' | 'app'>('global')
@@ -499,6 +639,13 @@ async function handleDelete(id: string): Promise<void> {
 
 // 初始化
 onMounted(() => {
+  // 检测平台
+  const userAgent = navigator.userAgent.toLowerCase()
+  const platform = navigator.platform.toLowerCase()
+  
+  isMac.value = platform.includes('mac') || userAgent.includes('mac')
+  isWindows.value = platform.includes('win') || userAgent.includes('windows')
+  
   loadShortcuts()
 })
 </script>
@@ -526,7 +673,6 @@ onMounted(() => {
 .tabs-container {
   position: sticky;
   top: 0;
-  background: var(--bg-color);
   z-index: 10;
   padding-bottom: 16px;
 }
@@ -611,7 +757,24 @@ onMounted(() => {
 .shortcut-list {
   display: flex;
   flex-direction: column;
+  gap: 20px;
+}
+
+/* 分组标题 */
+.shortcut-section {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 4px;
+  margin-bottom: 4px;
 }
 
 .shortcut-item {
@@ -625,6 +788,16 @@ onMounted(() => {
 .shortcut-item:hover {
   background: var(--hover-bg);
   transform: translateX(2px);
+}
+
+/* 固定快捷键样式 */
+.shortcut-item.built-in {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.shortcut-item.built-in:hover {
+  transform: none;
 }
 
 .shortcut-info {
@@ -654,6 +827,18 @@ onMounted(() => {
   gap: 6px;
 }
 
+/* 内置徽章 */
+.built-in-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--control-bg);
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 /* 图标按钮颜色样式 */
 .edit-btn {
   color: var(--primary-color);
@@ -673,15 +858,12 @@ onMounted(() => {
 
 /* 空状态 */
 .empty-state {
-  position: absolute;
-  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 60px 20px;
   text-align: center;
-  pointer-events: none;
 }
 
 .empty-icon {
@@ -700,5 +882,28 @@ onMounted(() => {
 .empty-hint {
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+/* 内联空状态 (用于自定义快捷键区域) */
+.empty-state-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
+.empty-text-inline {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.empty-hint-inline {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.7;
 }
 </style>
