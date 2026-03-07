@@ -1,4 +1,5 @@
 import { ipcMain, shell } from 'electron'
+import { getFileIconAsBase64 } from '../../core/iconProtocol'
 
 /**
  * Shell API - 插件专用
@@ -48,6 +49,16 @@ export class PluginShellAPI {
           success: false,
           error: error instanceof Error ? error.message : '未知错误'
         }
+      }
+    })
+
+    // 获取文件系统图标（返回 base64 Data URL，同步）
+    ipcMain.on('get-file-icon', (event, filePath: string) => {
+      try {
+        event.returnValue = getFileIconAsBase64(filePath)
+      } catch (error: unknown) {
+        console.error('[PluginShell] 获取文件图标失败:', filePath, error)
+        event.returnValue = null
       }
     })
   }

@@ -11,7 +11,7 @@ import detachedWindowManager, { DETACHED_TITLEBAR_HEIGHT } from '../core/detache
 import { GLOBAL_SCROLLBAR_CSS } from '../core/globalStyles'
 import { isInternalPlugin } from '../core/internalPlugins'
 import pluginWindowManager from '../core/pluginWindowManager'
-import { registerIconProtocolForSession } from '../index'
+import { registerIconProtocolForSession } from '../core/iconProtocol'
 import proxyManager from './proxyManager'
 import {
   EnterPayload,

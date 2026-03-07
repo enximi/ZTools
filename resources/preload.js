@@ -379,6 +379,8 @@ window.ztools = {
   // 在文件管理器中显示文件
   shellShowItemInFolder: (fullPath) =>
     electron.ipcRenderer.sendSync('shell-show-item-in-folder', fullPath),
+  // 获取文件系统图标（返回 base64 Data URL）
+  getFileIcon: (filePath) => electron.ipcRenderer.sendSync('get-file-icon', filePath),
   // 插件跳转
   redirect: (label, payload) =>
     electron.ipcRenderer.sendSync('ztools-redirect', { label, payload }),

@@ -1,23 +1,16 @@
 import { platform } from '@electron-toolkit/utils'
-import { exec } from 'child_process'
-import { app, BrowserWindow, protocol, session } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
 import log from 'electron-log'
-import { promises as fs } from 'fs'
 import path from 'path'
-import { promisify } from 'util'
 import api from './api/index'
 import appWatcher from './appWatcher'
 import detachedWindowManager from './core/detachedWindowManager'
 import floatingBallManager from './core/floatingBallManager'
 import httpServer from './core/httpServer'
+import { registerIconProtocolForSession, registerIconScheme } from './core/iconProtocol'
 import { loadInternalPlugins } from './core/internalPluginLoader'
-
-import crypto from 'crypto'
 import pluginManager from './managers/pluginManager'
 import windowManager from './managers/windowManager'
-import { IconExtractor } from './core/native/index'
-
-const execAsync = promisify(exec)
 
 // Windows 平台需要设置 AppUserModelId 才能让单例锁正常工作
 if (process.platform === 'win32') {
@@ -36,38 +29,8 @@ if (!gotTheLock) {
   })
 }
 
-// ========== 关键修复：注册自定义协议为特权协议 ==========
-// 必须在 app.ready 之前调用，否则渲染进程会因为安全策略拒绝加载
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: 'ztools-icon',
-    privileges: {
-      bypassCSP: true, // 绕过 CSP 限制
-      secure: true, // 被视为安全协议（类似 https）
-      standard: false, // 非标准协议（自定义协议）
-      supportFetchAPI: true, // 支持 Fetch API
-      corsEnabled: false, // 禁用 CORS
-      stream: false // 不需要流式传输
-    }
-  }
-])
-
-// 定义全局图标内存缓存
-const iconMemoryCache = new Map<string, Buffer>()
-
-// Windows 图标提取串行队列，避免同步调用并发阻塞主进程
-let iconExtractQueue: Promise<void> = Promise.resolve()
-
-function extractIconSerialized(iconPath: string, size: 16 | 32 | 64 | 256): Promise<Buffer | null> {
-  return new Promise((resolve) => {
-    iconExtractQueue = iconExtractQueue.then(() => {
-      const b = performance.now()
-      const result = IconExtractor.getFileIcon(iconPath, size)
-      console.debug(`[Main]获取图标【${iconPath}】耗时：${performance.now() - b}`)
-      resolve(result)
-    })
-  })
-}
+// ========== 注册自定义协议为特权协议（必须在 app.ready 之前调用）==========
+registerIconScheme()
 
 // 配置 electron-log
 log.transports.file.level = 'debug'
@@ -103,90 +66,6 @@ export function updateShortcut(shortcut: string): boolean {
 
 export function getCurrentShortcut(): string {
   return windowManager.getCurrentShortcut()
-}
-
-/**
- * 在指定 session 中注册 ztools-icon:// 协议 handler
- * 供内置插件使用（外部插件不需要访问应用图标）
- */
-export function registerIconProtocolForSession(targetSession: Electron.Session): void {
-  // 检查协议是否已注册（避免重复注册导致错误）
-  if (targetSession.protocol.isProtocolHandled('ztools-icon')) {
-    return
-  }
-
-  targetSession.protocol.handle('ztools-icon', async (request) => {
-    try {
-      const urlPath = request.url.replace('ztools-icon://', '')
-      const iconPath = decodeURIComponent(urlPath)
-
-      // A. 命中内存缓存：直接返回
-      const cached = iconMemoryCache.get(iconPath)
-      if (cached) {
-        return new Response(new Uint8Array(cached), {
-          status: 200,
-          headers: {
-            'content-type': 'image/png',
-            'content-length': cached.length.toString(),
-            'access-control-allow-origin': '*'
-          }
-        })
-      }
-
-      // B. 未命中：根据平台提取图标
-      let buffer: Buffer
-
-      if (process.platform === 'darwin') {
-        // macOS: 使用 sips 转换 ICNS 为 PNG
-        const tempDir = path.join(app.getPath('temp'), 'ztools-icons')
-        await fs.mkdir(tempDir, { recursive: true })
-
-        // 使用图标路径的哈希作为临时文件名
-        const hash = crypto.createHash('md5').update(iconPath).digest('hex')
-        const tempPngPath = path.join(tempDir, `${hash}.png`)
-
-        // 检查临时文件是否已存在
-        try {
-          await fs.access(tempPngPath)
-          // 文件存在，直接读取
-          buffer = await fs.readFile(tempPngPath)
-        } catch {
-          // 文件不存在，使用 sips 转换
-          try {
-            await execAsync(
-              `sips -s format png '${iconPath}' --out '${tempPngPath}' --resampleHeightWidth 64 64 2>/dev/null`
-            )
-            buffer = await fs.readFile(tempPngPath)
-          } catch (error) {
-            console.error('[Main] sips 转换失败:', iconPath, error)
-            throw new Error('Icon conversion failed')
-          }
-        }
-      } else {
-        // Windows: 使用原生模块提取图标（串行队列避免阻塞）
-        const iconBuffer = await extractIconSerialized(iconPath, 32)
-        if (!iconBuffer) {
-          throw new Error('Failed to extract icon')
-        }
-        buffer = iconBuffer
-      }
-
-      // 写入内存缓存
-      iconMemoryCache.set(iconPath, buffer)
-
-      return new Response(new Uint8Array(buffer), {
-        status: 200,
-        headers: {
-          'content-type': 'image/png',
-          'content-length': buffer.length.toString(),
-          'access-control-allow-origin': '*'
-        }
-      })
-    } catch (error) {
-      console.error('[Main] 图标提取失败:', error)
-      return new Response('Icon Error', { status: 404 })
-    }
-  })
 }
 
 app.whenReady().then(() => {
