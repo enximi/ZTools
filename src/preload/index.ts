@@ -85,6 +85,8 @@ const api = {
     ipcRenderer.invoke('unpin-app', appPath, featureCode, name),
   updatePinnedOrder: (newOrder: any[]) => ipcRenderer.invoke('update-pinned-order', newOrder),
   hidePlugin: () => ipcRenderer.send('hide-plugin'),
+  setAssemblyTarget: (token: string) => ipcRenderer.invoke('set-assembly-target', token),
+  endAssemblyPlugin: () => ipcRenderer.invoke('end-assembly-plugin'),
   onContextMenuCommand: (callback: (command: string) => void) => {
     ipcRenderer.on('context-menu-command', (_event, command) => callback(command))
   },
@@ -484,6 +486,8 @@ declare global {
       unpinApp: (appPath: string, featureCode?: string, name?: string) => Promise<void>
       updatePinnedOrder: (newOrder: any[]) => Promise<void>
       hidePlugin: () => void
+      setAssemblyTarget: (token: string) => Promise<boolean>
+      endAssemblyPlugin: () => Promise<string | null>
       onContextMenuCommand: (callback: (command: string) => void) => void
       onFocusSearch: (
         callback: (

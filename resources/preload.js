@@ -10,6 +10,9 @@ if (!electron.ipcRenderer.sendTo) {
 
 // 事件监听采用单回调模式：重复注册会替换之前的回调，避免插件热重载时累积多个监听器
 let enterCallback = null
+// 进入事件粘性缓存：解决 onPluginEnter 晚绑定导致的事件丢失
+let pendingEnterPayload = null
+let pendingEnterMeta = null
 let clipboardChangeCallback = null
 let subInputChangeCallback = null
 let pluginOutCallback = null
@@ -19,6 +22,34 @@ let hotkeyRecordedCallback = null
 let windowMaterialChangeCallback = null
 let logEntriesCallback = null
 let foundInPageCallback = null
+
+/**
+ * 统一派发插件进入事件（已注册回调时调用）
+ */
+function dispatchPluginEnter(launchParam) {
+  if (!enterCallback) return
+  console.log('[PluginRuntime][Enter] dispatch-now', {
+    assemblyId: launchParam?.__assemblyId,
+    ts: launchParam?.__ts
+  })
+  enterCallback(launchParam)
+}
+
+/**
+ * 回放缓存的进入事件（仅保留最新一条）
+ */
+function replayPendingPluginEnterIfNeeded() {
+  if (!enterCallback || !pendingEnterPayload) return
+  const replayPayload = pendingEnterPayload
+  const replayMeta = pendingEnterMeta
+  // 清空后再异步回放，避免重复触发
+  pendingEnterPayload = null
+  pendingEnterMeta = null
+  console.log('[PluginRuntime][Enter] replay-pending', replayMeta || {})
+  queueMicrotask(() => {
+    dispatchPluginEnter(replayPayload)
+  })
+}
 
 // 获取操作系统类型
 const osType = electron.ipcRenderer.sendSync('get-os-type')
@@ -64,6 +95,8 @@ window.ztools = {
   onPluginEnter: async (callback) => {
     console.log('插件请求onPluginEnter')
     enterCallback = callback
+    console.log('[PluginRuntime][Enter] enter-handler-registered')
+    replayPendingPluginEnterIfNeeded()
   },
   // 插件退出事件
   onPluginOut: async (callback) => {
@@ -90,6 +123,8 @@ window.ztools = {
   onPluginReady: async (callback) => {
     console.log('插件请求onPluginReady')
     enterCallback = callback
+    console.log('[PluginRuntime][Enter] enter-handler-registered(by-ready)')
+    replayPendingPluginEnterIfNeeded()
   },
   // 显示系统通知
   showNotification: async (body) => {
@@ -705,7 +740,18 @@ window.ztools = {
 
 electron.ipcRenderer.on('on-plugin-enter', (event, launchParam) => {
   console.log('插件进入参数:', launchParam)
-  if (enterCallback) enterCallback(launchParam)
+  if (enterCallback) {
+    dispatchPluginEnter(launchParam)
+    return
+  }
+
+  // 晚绑定场景：先缓存最近一次 enter，待 onPluginEnter 注册后回放
+  pendingEnterPayload = launchParam
+  pendingEnterMeta = {
+    assemblyId: launchParam?.__assemblyId,
+    ts: launchParam?.__ts
+  }
+  console.log('[PluginRuntime][Enter] enter-received-buffered', pendingEnterMeta)
 })
 
 // 监听插件退出事件

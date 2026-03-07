@@ -29,6 +29,34 @@ interface PluginViewInfo {
   logo?: string
   isDevelopment?: boolean
 }
+
+type AssemblyStatus =
+  | 'idle'
+  | 'assembling'
+  | 'domReady'
+  | 'readyToDisplay'
+  | 'displayed'
+  | 'aborted'
+
+interface AssemblySession {
+  id: string
+  pluginPath: string
+  featureCode: string
+  status: AssemblyStatus
+  createdAt: number
+}
+
+interface EnterPayload {
+  code: string
+  type: string
+  payload: any
+  option?: any
+}
+
+interface EnterPayloadWithAssembly extends EnterPayload {
+  __assemblyId?: string
+  __ts: number
+}
 export class PluginManager {
   // ==================== 插件配置/视图创建辅助方法 ====================
 
@@ -164,6 +192,12 @@ export class PluginManager {
   private pluginView: WebContentsView | null = null
   private currentPluginPath: string | null = null
   private pluginViews: Array<PluginViewInfo> = []
+  // 当前插件装配会话，用于并发进入时的过期判定
+  private currentAssembly: AssemblySession | null = null
+  // 生命周期事件串行链，按 webContents.id 维度保证顺序
+  private lifecycleChains = new Map<number, Promise<void>>()
+  // 记录已触发过 dom-ready 的视图，避免重复等待
+  private domReadyViews = new Set<number>()
   // 记录最近一次插件 ESC 触发的时间，用于短时间内抑制主窗口 hide
   private lastPluginEscTime: number | null = null
   // 插件默认高度（可配置）
@@ -187,6 +221,257 @@ export class PluginManager {
     this.mainWindow = mainWindow
   }
 
+  /**
+   * 统一 Assembly Trace 日志，避免日志字段不一致
+   */
+  private logAssemblyTrace(
+    stage: string,
+    info: { assemblyId?: string; pluginPath?: string; featureCode?: string; [key: string]: any }
+  ): void {
+    console.log('[Plugin][Assembly][Trace]', {
+      stage,
+      ...info
+    })
+  }
+
+  private newAssemblyId(): string {
+    return `asm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  }
+
+  private beginAssembly(pluginPath: string, featureCode: string): AssemblySession {
+    const old = this.currentAssembly
+    if (old) {
+      old.status = 'aborted'
+      this.logAssemblyTrace('abort-previous', {
+        assemblyId: old.id,
+        pluginPath: old.pluginPath,
+        featureCode: old.featureCode,
+        previousStatus: old.status
+      })
+    }
+
+    const session: AssemblySession = {
+      id: this.newAssemblyId(),
+      pluginPath,
+      featureCode,
+      status: 'assembling',
+      createdAt: Date.now()
+    }
+    this.currentAssembly = session
+
+    this.logAssemblyTrace('begin', {
+      assemblyId: session.id,
+      pluginPath,
+      featureCode,
+      createdAt: session.createdAt
+    })
+
+    return session
+  }
+
+  private isActiveAssembly(session: AssemblySession): boolean {
+    return (
+      !!this.currentAssembly &&
+      this.currentAssembly.id === session.id &&
+      this.currentAssembly.status !== 'aborted'
+    )
+  }
+
+  private markAssembly(session: AssemblySession, status: AssemblyStatus): void {
+    if (!this.isActiveAssembly(session)) return
+    const previousStatus = this.currentAssembly!.status
+    this.currentAssembly!.status = status
+    this.logAssemblyTrace('status-change', {
+      assemblyId: session.id,
+      pluginPath: session.pluginPath,
+      featureCode: session.featureCode,
+      from: previousStatus,
+      to: status
+    })
+  }
+
+  private getAssemblyToken(session: AssemblySession): string {
+    return `${session.pluginPath}::${session.featureCode}::${session.id}`
+  }
+
+  /**
+   * 构建插件进入 payload（附带装配元信息）
+   * 说明：
+   * 1. 不改动插件既有业务字段（code/type/payload/option）
+   * 2. 仅追加 __assemblyId / __ts，供插件侧做晚绑定补偿与过期防护
+   */
+  private buildEnterPayload(
+    action: EnterPayload,
+    assembly?: AssemblySession
+  ): EnterPayloadWithAssembly {
+    const payload: EnterPayloadWithAssembly = {
+      ...action,
+      __assemblyId: assembly?.id,
+      __ts: Date.now()
+    }
+    this.logAssemblyTrace('build-enter-payload', {
+      assemblyId: assembly?.id,
+      enterTs: payload.__ts
+    })
+    return payload
+  }
+
+  /**
+   * 向主渲染请求装配回执，作为展示前的最终一致性栅栏
+   */
+  private async requestAssemblyAckFromRenderer(session: AssemblySession): Promise<boolean> {
+    if (!this.mainWindow || this.mainWindow.webContents.isDestroyed()) {
+      this.logAssemblyTrace('ack-skip-main-window-unavailable', {
+        assemblyId: session.id,
+        pluginPath: session.pluginPath,
+        featureCode: session.featureCode
+      })
+      return false
+    }
+
+    const token = this.getAssemblyToken(session)
+    const startAt = Date.now()
+    this.logAssemblyTrace('ack-request-start', {
+      assemblyId: session.id,
+      pluginPath: session.pluginPath,
+      featureCode: session.featureCode,
+      token
+    })
+
+    try {
+      await this.mainWindow.webContents.executeJavaScript(
+        `window.ztools?.setAssemblyTarget?.(${JSON.stringify(token)})`
+      )
+      const returned = await this.mainWindow.webContents.executeJavaScript(
+        `window.ztools?.endAssemblyPlugin?.()`
+      )
+      const ok = returned === token
+      this.logAssemblyTrace('ack-request-finish', {
+        assemblyId: session.id,
+        pluginPath: session.pluginPath,
+        featureCode: session.featureCode,
+        token,
+        returned,
+        ok,
+        durationMs: Date.now() - startAt
+      })
+
+      if (!ok) {
+        console.warn('[Plugin][Assembly] ack mismatch:', {
+          assemblyId: session.id,
+          expected: token,
+          returned
+        })
+      }
+      return ok
+    } catch (error) {
+      console.error('[Plugin][Assembly] request ack failed:', error)
+      return false
+    }
+  }
+
+  private async triggerPluginLifecycleEvent(
+    view: WebContentsView,
+    eventName: 'PluginReady' | 'PluginEnter' | 'PluginOut' | 'PluginDetach',
+    payload?: any
+  ): Promise<void> {
+    const webContents = view?.webContents
+    if (!webContents || webContents.isDestroyed()) {
+      console.warn('[Plugin][Lifecycle] skip: view unavailable or destroyed', { eventName })
+      return
+    }
+
+    const id = webContents.id
+    const prev = this.lifecycleChains.get(id) ?? Promise.resolve()
+    const hasQueued = this.lifecycleChains.has(id)
+    console.log('[Plugin][Lifecycle] queue-enter', {
+      webContentsId: id,
+      eventName,
+      hasQueued
+    })
+    const next = prev
+      .catch(() => {})
+      .then(() => {
+        if (webContents.isDestroyed()) return
+        console.log('[Plugin][Lifecycle] dispatch', { webContentsId: id, eventName })
+
+        if (eventName === 'PluginEnter') {
+          webContents.send('on-plugin-enter', payload)
+          return
+        }
+        if (eventName === 'PluginOut') {
+          webContents.send('plugin-out', !!payload)
+          return
+        }
+        if (eventName === 'PluginDetach') {
+          webContents.send('plugin-detach')
+          return
+        }
+        webContents.send('plugin-ready', payload)
+      })
+    this.lifecycleChains.set(id, next)
+
+    try {
+      await next
+      console.log('[Plugin][Lifecycle] queue-finish', { webContentsId: id, eventName })
+    } finally {
+      if (this.lifecycleChains.get(id) === next) {
+        this.lifecycleChains.delete(id)
+        console.log('[Plugin][Lifecycle] queue-clear', { webContentsId: id, eventName })
+      }
+    }
+  }
+
+  /**
+   * 等待插件视图进入 dom-ready，支持已就绪命中与超时兜底
+   */
+  private waitForPluginDomReady(view: WebContentsView, timeoutMs: number = 5000): Promise<void> {
+    const webContents = view.webContents
+    if (webContents.isDestroyed()) {
+      console.warn('[Plugin][DomReady] skip: webContents destroyed')
+      return Promise.resolve()
+    }
+    if (this.domReadyViews.has(webContents.id)) {
+      console.log('[Plugin][DomReady] hit cached ready state', {
+        webContentsId: webContents.id
+      })
+      return Promise.resolve()
+    }
+
+    console.log('[Plugin][DomReady] waiting', {
+      webContentsId: webContents.id,
+      timeoutMs
+    })
+
+    return new Promise((resolve) => {
+      let done = false
+      const startedAt = Date.now()
+      const finish = (): void => {
+        if (done) return
+        done = true
+        clearTimeout(timeout)
+        console.log('[Plugin][DomReady] finished', {
+          webContentsId: webContents.id,
+          durationMs: Date.now() - startedAt
+        })
+        resolve()
+      }
+      const timeout = setTimeout(() => {
+        console.warn('[Plugin][DomReady] timeout fallback triggered', {
+          webContentsId: webContents.id,
+          timeoutMs
+        })
+        finish()
+      }, timeoutMs)
+
+      webContents.once('dom-ready', () => {
+        this.domReadyViews.add(webContents.id)
+        console.log('[Plugin][DomReady] event received', { webContentsId: webContents.id })
+        finish()
+      })
+    })
+  }
+
   // 创建或更新插件视图
   public async createPluginView(
     pluginPath: string,
@@ -194,8 +479,15 @@ export class PluginManager {
     cmdName?: string
   ): Promise<void> {
     if (!this.mainWindow) return
+    const assembly = this.beginAssembly(pluginPath, featureCode)
 
-    console.log('[Plugin] 准备加载插件:', { pluginPath, featureCode })
+    console.log('[Plugin] 准备加载插件:', { assemblyId: assembly.id, pluginPath, featureCode })
+    this.logAssemblyTrace('create-plugin-view-enter', {
+      assemblyId: assembly.id,
+      pluginPath,
+      featureCode,
+      currentPluginPath: this.currentPluginPath
+    })
 
     const pluginInfoFromDB = this.fetchPluginInfoFromDB(pluginPath)
 
@@ -203,37 +495,71 @@ export class PluginManager {
     if (this.currentPluginPath === pluginPath) {
       const cached = this.pluginViews.find((v) => v.path === pluginPath)
       if (cached) {
-        this.processPluginMode(pluginPath, featureCode, cached.view)
+        this.logAssemblyTrace('reuse-current-plugin-view', {
+          assemblyId: assembly.id,
+          pluginPath,
+          featureCode
+        })
+        await this.processPluginMode(pluginPath, featureCode, cached.view, assembly)
       }
       return
     }
 
     if (this.currentPluginPath != null) {
+      this.logAssemblyTrace('hide-current-plugin-before-switch', {
+        assemblyId: assembly.id,
+        pluginPath,
+        featureCode,
+        currentPluginPath: this.currentPluginPath
+      })
       this.hidePluginView()
     }
 
     // 先尝试从缓存中复用已有视图
     const cached = this.pluginViews.find((v) => v.path === pluginPath)
     if (cached) {
-      this.restoreCachedPluginView(cached, pluginPath, pluginInfoFromDB, featureCode, cmdName)
+      this.logAssemblyTrace('restore-cached-plugin-view', {
+        assemblyId: assembly.id,
+        pluginPath,
+        featureCode
+      })
+      await this.restoreCachedPluginView(
+        cached,
+        pluginPath,
+        pluginInfoFromDB,
+        featureCode,
+        cmdName,
+        assembly
+      )
       return
     }
 
     // 缓存未命中，创建新的插件视图
-    await this.createNewPluginView(pluginPath, pluginInfoFromDB, featureCode, cmdName)
+    this.logAssemblyTrace('create-new-plugin-view', {
+      assemblyId: assembly.id,
+      pluginPath,
+      featureCode
+    })
+    await this.createNewPluginView(pluginPath, pluginInfoFromDB, featureCode, cmdName, assembly)
   }
 
   /**
    * 恢复缓存的插件视图
    */
-  private restoreCachedPluginView(
+  private async restoreCachedPluginView(
     cached: PluginViewInfo,
     pluginPath: string,
     pluginInfoFromDB: any,
     featureCode: string,
-    cmdName?: string
-  ): void {
+    cmdName?: string,
+    assembly?: AssemblySession
+  ): Promise<void> {
     if (!this.mainWindow) return
+    this.logAssemblyTrace('restore-cached-start', {
+      assemblyId: assembly?.id,
+      pluginPath,
+      featureCode
+    })
 
     this.pluginView = cached.view
     this.mainWindow.contentView.addChildView(this.pluginView)
@@ -270,7 +596,12 @@ export class PluginManager {
     }
 
     console.log('[Plugin] 复用缓存的 Plugin BrowserView')
-    this.processPluginMode(pluginPath, featureCode, this.pluginView)
+    this.logAssemblyTrace('restore-cached-finish', {
+      assemblyId: assembly?.id,
+      pluginPath,
+      featureCode
+    })
+    return this.processPluginMode(pluginPath, featureCode, this.pluginView, assembly)
   }
 
   /**
@@ -280,20 +611,22 @@ export class PluginManager {
     pluginPath: string,
     pluginInfoFromDB: any,
     featureCode: string,
-    cmdName?: string
+    cmdName?: string,
+    assembly?: AssemblySession
   ): Promise<void> {
     if (!this.mainWindow) return
 
     try {
+      this.logAssemblyTrace('create-new-view-start', {
+        assemblyId: assembly?.id,
+        pluginPath,
+        featureCode
+      })
       // 插件加载时，先将窗口高度设置为 1px，避免节流
       api.resizeWindow(WINDOW_INITIAL_HEIGHT + 1)
       const pluginConfig = this.readPluginConfig(pluginPath)
       const isDevelopment = !!pluginInfoFromDB?.isDevelopment
-      const { pluginUrl, isConfigHeadless } = this.resolvePluginUrl(
-        pluginPath,
-        pluginConfig,
-        isDevelopment
-      )
+      const { pluginUrl } = this.resolvePluginUrl(pluginPath, pluginConfig, isDevelopment)
 
       const preloadPath = pluginConfig.preload
         ? path.join(pluginPath, pluginConfig.preload)
@@ -309,14 +642,8 @@ export class PluginManager {
 
       // 设置初始布局（使用固定宽度常量，避免多显示器 DPI 缩放导致尺寸漂移）
       const windowWidth = WINDOW_WIDTH
-      let initialViewHeight: number | null = null
-
       // 设置初始高度为 1px，避免节流
       this.pluginView.setBounds({ x: 0, y: WINDOW_INITIAL_HEIGHT, width: windowWidth, height: 1 })
-
-      if (!isConfigHeadless) {
-        initialViewHeight = this.pluginDefaultHeight
-      }
 
       // 缓存新创建的视图
       const logoUrl = this.buildPluginLogoUrl(pluginPath, pluginConfig.logo)
@@ -345,19 +672,44 @@ export class PluginManager {
       const view = this.pluginView
       view.webContents.loadURL(pluginUrl)
 
-      view.webContents.on('dom-ready', () => {
-        view.webContents.insertCSS(GLOBAL_SCROLLBAR_CSS)
-        this.processPluginMode(pluginPath, featureCode, view)
-        this.sendPluginLoadedEvent(pluginConfig.name, pluginPath)
-
-        if (initialViewHeight !== null) {
-          this.setExpendHeight(initialViewHeight, true)
+      view.webContents.once('dom-ready', async () => {
+        this.domReadyViews.add(view.webContents.id)
+        if (assembly && !this.isActiveAssembly(assembly)) {
+          this.logAssemblyTrace('dom-ready-ignored-inactive-session', {
+            assemblyId: assembly.id,
+            pluginPath,
+            featureCode
+          })
+          return
         }
+        if (assembly) {
+          this.markAssembly(assembly, 'domReady')
+        }
+
+        view.webContents.insertCSS(GLOBAL_SCROLLBAR_CSS)
+        await this.processPluginMode(pluginPath, featureCode, view, assembly)
+        this.sendPluginLoadedEvent(pluginConfig.name, pluginPath)
+        this.logAssemblyTrace('create-new-view-dom-ready-finish', {
+          assemblyId: assembly?.id,
+          pluginPath,
+          featureCode
+        })
       })
 
       console.log('[Plugin] Plugin WebContentsView 已创建并缓存')
+      this.logAssemblyTrace('create-new-view-finish', {
+        assemblyId: assembly?.id,
+        pluginPath,
+        featureCode
+      })
     } catch (error) {
       console.error('[Plugin] 加载插件配置失败:', error)
+      this.logAssemblyTrace('create-new-view-error', {
+        assemblyId: assembly?.id,
+        pluginPath,
+        featureCode,
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
   }
 
@@ -412,12 +764,14 @@ export class PluginManager {
         exitCode: details.exitCode
       })
 
-      if (!this.pluginView?.webContents.isDestroyed()) {
-        this.pluginView?.webContents.send('plugin-out', true)
+      const currentView = this.pluginView
+      if (currentView && !currentView.webContents.isDestroyed()) {
+        void this.triggerPluginLifecycleEvent(currentView, 'PluginOut', true)
       }
 
       const index = this.pluginViews.findIndex((v) => v.path === pluginPath)
       if (index !== -1) {
+        this.domReadyViews.delete(this.pluginViews[index].view.webContents.id)
         this.pluginViews.splice(index, 1)
         console.log('[Plugin] 已从缓存中移除崩溃的插件:', pluginPath)
       }
@@ -445,10 +799,14 @@ export class PluginManager {
     if (this.pluginView && this.mainWindow) {
       const currentPath = this.currentPluginPath
       const pluginView = this.pluginView
+      console.log('[Plugin] 隐藏插件视图:', {
+        currentPath,
+        hasAssembly: !!this.currentAssembly
+      })
 
       // 发送插件退出事件（isKill=false 表示正常退出）
       if (!pluginView.webContents.isDestroyed()) {
-        pluginView.webContents.send('plugin-out', false)
+        void this.triggerPluginLifecycleEvent(pluginView, 'PluginOut', false)
       }
 
       // 获取插件名称
@@ -462,6 +820,15 @@ export class PluginManager {
       // 将当前引用清空，但缓存仍保留
       this.pluginView = null
       this.currentPluginPath = null
+      if (this.currentAssembly) {
+        this.currentAssembly.status = 'aborted'
+        this.logAssemblyTrace('hide-view-abort-assembly', {
+          assemblyId: this.currentAssembly.id,
+          pluginPath: this.currentAssembly.pluginPath,
+          featureCode: this.currentAssembly.featureCode
+        })
+      }
+      this.currentAssembly = null
 
       // 通知渲染进程插件已关闭
       this.mainWindow.webContents.send('plugin-closed')
@@ -523,6 +890,7 @@ export class PluginManager {
     }
 
     try {
+      console.log('[Plugin] 开始后台预加载插件:', { pluginPath })
       const pluginInfoFromDB = this.fetchPluginInfoFromDB(pluginPath)
       const pluginConfig = this.readPluginConfig(pluginPath)
       const isDevelopment = !!pluginInfoFromDB?.isDevelopment
@@ -554,9 +922,14 @@ export class PluginManager {
       // 加载插件 URL
       view.webContents.loadURL(pluginUrl)
 
-      view.webContents.on('dom-ready', () => {
+      view.webContents.once('dom-ready', () => {
+        this.domReadyViews.add(view.webContents.id)
         view.webContents.insertCSS(GLOBAL_SCROLLBAR_CSS)
-        console.log('[Plugin] 后台预加载插件完成:', pluginConfig.name)
+        console.log('[Plugin] 后台预加载插件完成:', {
+          pluginName: pluginConfig.name,
+          pluginPath,
+          webContentsId: view.webContents.id
+        })
       })
 
       console.log('[Plugin] 后台预加载插件:', pluginConfig.name)
@@ -589,6 +962,7 @@ export class PluginManager {
   // 终止指定插件
   public killPlugin(pluginPath: string): boolean {
     try {
+      console.log('[Plugin] killPlugin 开始:', { pluginPath })
       const index = this.pluginViews.findIndex((v) => v.path === pluginPath)
       if (index === -1) {
         console.log('[Plugin] 插件未运行:', pluginPath)
@@ -599,7 +973,7 @@ export class PluginManager {
 
       // 发送插件退出事件（isKill=true 表示进程结束）
       if (!view.webContents.isDestroyed()) {
-        view.webContents.send('plugin-out', true)
+        void this.triggerPluginLifecycleEvent(view, 'PluginOut', true)
       }
 
       // 如果是当前显示的插件，先隐藏
@@ -607,12 +981,14 @@ export class PluginManager {
         this.mainWindow.contentView.removeChildView(view)
         this.pluginView = null
         this.currentPluginPath = null
+        this.currentAssembly = null
       }
 
       // 销毁 webContents
       if (!view.webContents.isDestroyed()) {
         view.webContents.close()
       }
+      this.domReadyViews.delete(view.webContents.id)
 
       // 关闭该插件创建的所有窗口
       pluginWindowManager.closeByPlugin(pluginPath)
@@ -621,6 +997,10 @@ export class PluginManager {
       this.pluginViews.splice(index, 1)
 
       console.log('[Plugin] 插件已终止:', pluginPath)
+      console.log('[Plugin] killPlugin 完成:', {
+        pluginPath,
+        remainingPlugins: this.pluginViews.length
+      })
       return true
     } catch (error) {
       console.error('[Plugin] 终止插件失败:', error)
@@ -640,15 +1020,17 @@ export class PluginManager {
 
   // 终止所有插件
   public killAllPlugins(): void {
+    console.log('[Plugin] killAllPlugins 开始:', { total: this.pluginViews.length })
     for (const { view, path } of this.pluginViews) {
       try {
         // 发送插件退出事件（isKill=true 表示进程结束）
         if (!view.webContents.isDestroyed()) {
-          view.webContents.send('plugin-out', true)
+          void this.triggerPluginLifecycleEvent(view, 'PluginOut', true)
         }
         if (!view.webContents.isDestroyed()) {
           view.webContents.close()
         }
+        this.domReadyViews.delete(view.webContents.id)
         // 关闭该插件创建的所有窗口
         pluginWindowManager.closeByPlugin(path)
         console.log('[Plugin] 插件已终止:', path)
@@ -664,6 +1046,8 @@ export class PluginManager {
     this.pluginViews = []
     this.pluginView = null
     this.currentPluginPath = null
+    this.currentAssembly = null
+    console.log('[Plugin] killAllPlugins 完成')
   }
 
   /**
@@ -849,19 +1233,68 @@ export class PluginManager {
   private async processPluginMode(
     pluginPath: string,
     featureCode: string,
-    view: WebContentsView
+    view: WebContentsView,
+    assembly?: AssemblySession
   ): Promise<void> {
     const mode = await this.getPluginMode(view.webContents, featureCode)
-    console.log('[Plugin] 插件模式:', mode)
+    console.log('[Plugin] 插件模式:', {
+      assemblyId: assembly?.id,
+      pluginPath,
+      featureCode,
+      mode
+    })
+
+    if (assembly && !this.isActiveAssembly(assembly)) {
+      this.logAssemblyTrace('process-mode-skip-inactive-session', {
+        assemblyId: assembly.id,
+        pluginPath,
+        featureCode,
+        mode
+      })
+      return
+    }
 
     // 检查视图是否仍是活动视图
-    if (this.pluginView !== view) return
+    if (this.pluginView !== view) {
+      this.logAssemblyTrace('process-mode-skip-inactive-view', {
+        assemblyId: assembly?.id,
+        pluginPath,
+        featureCode
+      })
+      return
+    }
 
     if (mode === 'none') {
       // 无界面插件，调用插件方法
       this.setExpendHeight(0, false) // 不更新缓存，保留上次的 UI 高度
       this.callHeadlessPluginMethod(pluginPath, featureCode, api.getLaunchParam())
+      this.logAssemblyTrace('process-mode-headless', {
+        assemblyId: assembly?.id,
+        pluginPath,
+        featureCode
+      })
+      if (assembly) this.markAssembly(assembly, 'displayed')
     } else {
+      if (assembly) {
+        this.markAssembly(assembly, 'readyToDisplay')
+        const ack = await this.requestAssemblyAckFromRenderer(assembly)
+        this.logAssemblyTrace('process-mode-ack-result', {
+          assemblyId: assembly.id,
+          pluginPath,
+          featureCode,
+          ack
+        })
+        if (!ack || !this.isActiveAssembly(assembly)) {
+          this.logAssemblyTrace('process-mode-skip-after-ack', {
+            assemblyId: assembly.id,
+            pluginPath,
+            featureCode,
+            ack
+          })
+          return
+        }
+      }
+
       // 有界面插件
       // 恢复高度: 优先使用缓存的高度，如果没有则使用默认高度
       const cached = this.pluginViews.find((v) => v.path === pluginPath)
@@ -875,7 +1308,18 @@ export class PluginManager {
       // 让插件视图获取焦点
       view.webContents.focus()
       // 通知插件进入事件
-      view.webContents.send('on-plugin-enter', api.getLaunchParam())
+      const enterPayload = this.buildEnterPayload(api.getLaunchParam() as EnterPayload, assembly)
+      await this.triggerPluginLifecycleEvent(view, 'PluginReady')
+      await this.triggerPluginLifecycleEvent(view, 'PluginEnter', enterPayload)
+      this.logAssemblyTrace('process-mode-enter-dispatched', {
+        assemblyId: assembly?.id,
+        pluginPath,
+        featureCode,
+        targetHeight,
+        enterAssemblyId: enterPayload.__assemblyId,
+        enterTs: enterPayload.__ts
+      })
+      if (assembly) this.markAssembly(assembly, 'displayed')
     }
   }
 
@@ -939,34 +1383,22 @@ export class PluginManager {
     _featureCode: string,
     queryData: { code: string; type: string; payload: string }
   ): Promise<any[]> {
+    console.log('[Plugin][MainPush] query start:', { pluginPath, queryData })
     // 确保插件已加载
     let plugin = this.pluginViews.find((v) => v.path === pluginPath)
     if (!plugin) {
+      console.log('[Plugin][MainPush] plugin not loaded, preload first:', { pluginPath })
       await this.preloadPlugin(pluginPath)
       // 等待 dom-ready（最多 5 秒）
       plugin = this.pluginViews.find((v) => v.path === pluginPath)
       if (plugin && !plugin.view.webContents.isDestroyed()) {
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(resolve, 5000)
-          if (plugin!.view.webContents.getURL()) {
-            plugin!.view.webContents.once('dom-ready', () => {
-              clearTimeout(timeout)
-              resolve()
-            })
-            // 如果已经 dom-ready 了，上面的事件不会触发，用短延时兜底
-            setTimeout(() => {
-              clearTimeout(timeout)
-              resolve()
-            }, 500)
-          } else {
-            clearTimeout(timeout)
-            resolve()
-          }
-        })
+        console.log('[Plugin][MainPush] waiting dom-ready after preload:', { pluginPath })
+        await this.waitForPluginDomReady(plugin.view, 5000)
       }
     }
 
     if (!plugin || plugin.view.webContents.isDestroyed()) {
+      console.warn('[Plugin][MainPush] query aborted: plugin unavailable', { pluginPath })
       return []
     }
 
@@ -977,6 +1409,12 @@ export class PluginManager {
 
       plugin!.view.webContents.ipc.once(`main-push-result-${callId}`, (_event, result) => {
         clearTimeout(timeout)
+        console.log('[Plugin][MainPush] result received:', {
+          pluginPath,
+          callId,
+          success: !!result?.success,
+          resultCount: Array.isArray(result?.results) ? result.results.length : 0
+        })
         if (result.success && Array.isArray(result.results)) {
           // 处理图标路径：将相对路径转为 file:// URL（保留原始 icon 不变，用 _resolvedIcon 展示）
           const processed = result.results.map((item: any) => {
@@ -1000,6 +1438,7 @@ export class PluginManager {
       })
 
       plugin!.view.webContents.send('main-push-query', { queryData, callId })
+      console.log('[Plugin][MainPush] query dispatched:', { pluginPath, callId })
     })
   }
 
@@ -1170,7 +1609,8 @@ export class PluginManager {
 
       pluginView.webContents.on('did-finish-load', () => {
         pluginView.webContents.insertCSS(GLOBAL_SCROLLBAR_CSS)
-        pluginView.webContents.send('on-plugin-enter', api.getLaunchParam())
+        const enterPayload = this.buildEnterPayload(api.getLaunchParam() as EnterPayload)
+        void this.triggerPluginLifecycleEvent(pluginView, 'PluginEnter', enterPayload)
       })
 
       console.log('[Plugin] 插件已在独立窗口中创建:', pluginConfig.name)
@@ -1213,7 +1653,7 @@ export class PluginManager {
 
       // 发送插件分离事件（在分离之前通知插件）
       if (!cached.view.webContents.isDestroyed()) {
-        cached.view.webContents.send('plugin-detach')
+        void this.triggerPluginLifecycleEvent(cached.view, 'PluginDetach')
       }
 
       // 检测主窗口是否处于焦点状态，且输入框是否处于聚焦状态

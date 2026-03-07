@@ -11,6 +11,7 @@ type WindowMaterial = 'mica' | 'acrylic' | 'none'
 export class WindowAPI {
   private mainWindow: Electron.BrowserWindow | null = null
   private lockedSize: { width: number; height: number } | null = null
+  private currentAssemblyTarget: string | null = null
 
   public init(mainWindow: Electron.BrowserWindow): void {
     this.mainWindow = mainWindow
@@ -49,6 +50,13 @@ export class WindowAPI {
     ipcMain.handle('set-tray-icon-visible', (_event, visible: boolean) =>
       this.setTrayIconVisible(visible)
     )
+    ipcMain.handle('set-assembly-target', (_event, token: string) => {
+      this.currentAssemblyTarget = token
+      return true
+    })
+    ipcMain.handle('end-assembly-plugin', () => {
+      return this.currentAssemblyTarget
+    })
     ipcMain.on('open-settings', () => this.openSettings())
   }
 
