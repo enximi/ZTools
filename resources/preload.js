@@ -145,9 +145,11 @@ window.ztools = {
     return await electron.ipcRenderer.invoke('show-notification', body)
   },
   // 显示 toast 提示
-  showToast: async (options) => {
-    // 如果是字符串,转换为对象
-    const toastOptions = typeof options === 'string' ? { message: options } : options
+  showToast: async (message, options = {}) => {
+    const toastOptions = {
+      message,
+      ...options
+    }
     return await electron.ipcRenderer.invoke('plugin:show-toast', toastOptions)
   },
   // 设置插件高度

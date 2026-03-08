@@ -34,7 +34,8 @@ class ToastManager {
 
     // 获取主屏幕尺寸
     const primaryDisplay = screen.getPrimaryDisplay()
-    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.bounds
+    const { y: workAreaY } = primaryDisplay.workArea
 
     // 创建透明全屏容器窗口
     this.containerWindow = new BrowserWindow({
@@ -72,10 +73,12 @@ class ToastManager {
     const html = this.generateContainerHTML()
     this.containerWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
 
-    // 不在这里显示，等待第一个 toast 时再显示
-    // this.containerWindow.once('ready-to-show', () => {
-    //   this.containerWindow?.show()
-    // })
+    // 窗口加载完成后立即显示（但内容为空）
+    this.containerWindow.once('ready-to-show', () => {
+      if (this.containerWindow && !this.containerWindow.isDestroyed()) {
+        this.containerWindow.showInactive() // 显示但不获取焦点
+      }
+    })
 
     return this.containerWindow
   }
@@ -97,17 +100,9 @@ class ToastManager {
     // 等待 webContents 准备好后再发送消息
     if (window.webContents.isLoading()) {
       window.webContents.once('did-finish-load', () => {
-        // 确保窗口已经显示
-        if (!window.isVisible()) {
-          window.showInactive() // 显示但不获取焦点
-        }
         sendUpdate()
       })
     } else {
-      // 确保窗口已经显示
-      if (!window.isVisible()) {
-        window.showInactive() // 显示但不获取焦点
-      }
       sendUpdate()
     }
   }
@@ -148,10 +143,8 @@ class ToastManager {
       this.toasts.splice(index, 1)
       this.updateToasts()
 
-      // 如果没有 toast 了，隐藏容器窗口
-      if (this.toasts.length === 0 && this.containerWindow && !this.containerWindow.isDestroyed()) {
-        this.containerWindow.hide()
-      }
+      // 不隐藏窗口，让窗口始终显示（但内容为空）
+      // 这样可以确保窗口位置始终一致
     }
   }
 
@@ -190,7 +183,7 @@ class ToastManager {
             pointer-events: none;
           }
           .toast-container.top {
-            top: 20px;
+            top: 60px;
           }
           .toast-container.bottom {
             bottom: 20px;
