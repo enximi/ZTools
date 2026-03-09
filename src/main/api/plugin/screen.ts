@@ -1,6 +1,18 @@
 import { ipcMain, screen, desktopCapturer, BrowserWindow } from 'electron'
 import { screenCapture } from '../../core/screenCapture.js'
+import { ColorPicker } from '../../core/native/index.js'
 import os from 'os'
+
+/**
+ * hex 转 rgb 字符串，如 '#59636E' → 'rgb(89, 99, 110)'
+ */
+function hexToRgb(hex: string): string {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  return `rgb(${r}, ${g}, ${b})`
+}
 
 /**
  * 屏幕和坐标相关API - 插件专用
@@ -87,6 +99,26 @@ export class PluginScreenAPI {
     // 获取操作系统类型
     ipcMain.on('get-os-type', (event) => {
       event.returnValue = os.type()
+    })
+
+    // 屏幕取色
+    ipcMain.handle('screen-color-pick', async () => {
+      return new Promise<{ success: boolean; hex: string | null; rgb: string | null }>(
+        (resolve) => {
+          try {
+            ColorPicker.start((result) => {
+              if (result.success && result.hex) {
+                resolve({ success: true, hex: result.hex, rgb: hexToRgb(result.hex) })
+              } else {
+                resolve({ success: false, hex: null, rgb: null })
+              }
+            })
+          } catch (error) {
+            console.error('[PluginScreen] 屏幕取色失败:', error)
+            resolve({ success: false, hex: null, rgb: null })
+          }
+        }
+      )
     })
   }
 }

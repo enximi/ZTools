@@ -39,6 +39,8 @@ interface NativeAddon {
   launchUwpApp: (appId: string) => boolean
   getFileIcon: (filePath: string, size: number) => Buffer | null
   resolveMuiStrings: (refs: string[]) => { [ref: string]: string }
+  startColorPicker: (callback: (result: { success: boolean; hex: string | null }) => void) => void
+  stopColorPicker: () => void
 }
 
 interface WindowInfo {
@@ -487,6 +489,70 @@ export class MuiResolver {
     }
     const result = (addon as NativeAddon).resolveMuiStrings(refs)
     return new Map(Object.entries(result))
+  }
+}
+
+/**
+ * 取色器类（仅 macOS）
+ * 进入取色模式后，鼠标附近会出现 9x9 像素放大网格
+ * 点击鼠标左键确认取色，按 ESC 键取消
+ */
+export class ColorPicker {
+  private static _callback: ((result: { success: boolean; hex: string | null }) => void) | null =
+    null
+  private static _isActive = false
+
+  /**
+   * 启动取色器
+   * @param callback - 取色完成时的回调函数
+   * - 成功: { success: true, hex: '#59636E' }
+   * - 取消: { success: false, hex: null }
+   */
+  static start(callback: (result: { success: boolean; hex: string | null }) => void): void {
+    if (platform !== 'darwin') {
+      throw new Error('ColorPicker is only supported on macOS')
+    }
+
+    if (ColorPicker._isActive) {
+      throw new Error('Color picker is already active')
+    }
+
+    if (typeof callback !== 'function') {
+      throw new TypeError('Callback must be a function')
+    }
+
+    ColorPicker._callback = callback
+    ColorPicker._isActive = true
+    ;(addon as NativeAddon).startColorPicker((result) => {
+      ;(addon as NativeAddon).stopColorPicker()
+
+      ColorPicker._isActive = false
+      if (ColorPicker._callback) {
+        const cb = ColorPicker._callback
+        ColorPicker._callback = null
+        cb(result)
+      }
+    })
+  }
+
+  /**
+   * 停止取色器（手动取消）
+   */
+  static stop(): void {
+    if (!ColorPicker._isActive) {
+      return
+    }
+
+    ;(addon as NativeAddon).stopColorPicker()
+    ColorPicker._isActive = false
+    ColorPicker._callback = null
+  }
+
+  /**
+   * 是否正在取色
+   */
+  static get isActive(): boolean {
+    return ColorPicker._isActive
   }
 }
 

@@ -373,6 +373,13 @@ window.ztools = {
       callback(image, bounds)
     }
   },
+  // 屏幕取色
+  screenColorPick: async (callback) => {
+    const result = await electron.ipcRenderer.invoke('screen-color-pick')
+    if (result.success && callback && typeof callback === 'function') {
+      callback({ hex: result.hex, rgb: result.rgb })
+    }
+  },
   // 显示主窗口
   showMainWindow: async () => {
     return await electron.ipcRenderer.invoke('show-main-window')
