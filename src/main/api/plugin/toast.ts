@@ -23,6 +23,8 @@ class ToastManager {
   private toasts: ToastItem[] = []
   private toastIdCounter = 0
   private readonly DEFAULT_DURATION = 3000
+  private destroyTimer: NodeJS.Timeout | null = null
+  private readonly DESTROY_DELAY = 1000 // 延迟销毁时间(毫秒)
 
   /**
    * 创建或获取容器窗口
@@ -113,6 +115,12 @@ class ToastManager {
   public showToast(options: ToastOptions): void {
     const { message, type = 'info', duration = this.DEFAULT_DURATION, position = 'top' } = options
 
+    // 取消待销毁的定时器
+    if (this.destroyTimer) {
+      clearTimeout(this.destroyTimer)
+      this.destroyTimer = null
+    }
+
     // 创建 toast item
     const toastId = `toast-${++this.toastIdCounter}-${Date.now()}`
     const toastItem: ToastItem = {
@@ -143,8 +151,17 @@ class ToastManager {
       this.toasts.splice(index, 1)
       this.updateToasts()
 
-      // 不隐藏窗口，让窗口始终显示（但内容为空）
-      // 这样可以确保窗口位置始终一致
+      // 如果是最后一个 toast，延迟销毁窗口
+      if (this.toasts.length === 0) {
+        this.destroyTimer = setTimeout(() => {
+          if (this.containerWindow && !this.containerWindow.isDestroyed()) {
+            this.containerWindow.hide()
+            this.containerWindow.destroy()
+            this.containerWindow = null
+          }
+          this.destroyTimer = null
+        }, this.DESTROY_DELAY)
+      }
     }
   }
 
@@ -404,6 +421,13 @@ class ToastManager {
    */
   public closeAll(): void {
     this.toasts = []
+
+    // 取消待销毁的定时器
+    if (this.destroyTimer) {
+      clearTimeout(this.destroyTimer)
+      this.destroyTimer = null
+    }
+
     if (this.containerWindow && !this.containerWindow.isDestroyed()) {
       this.containerWindow.hide()
       this.containerWindow.destroy()
