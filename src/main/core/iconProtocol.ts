@@ -5,8 +5,27 @@ import fs from 'fs'
 import path from 'path'
 import { IconExtractor } from './native/index'
 
-/** 图标内存缓存 */
+/** 图标内存缓存（LRU 淘汰，Map 按插入顺序迭代） */
 const iconMemoryCache = new Map<string, Buffer>()
+const MAX_ICON_CACHE = 128
+
+/**
+ * 写入图标缓存（LRU 淘汰）
+ * 命中时先 delete 再 set，保证该 key 移到 Map 末尾（最近使用）
+ */
+function setIconCache(key: string, buffer: Buffer): void {
+  // 已存在则先删除，重新插入以刷新顺序
+  if (iconMemoryCache.has(key)) {
+    iconMemoryCache.delete(key)
+  } else if (iconMemoryCache.size >= MAX_ICON_CACHE) {
+    // 淘汰最早插入（最久未使用）的条目
+    const oldest = iconMemoryCache.keys().next().value
+    if (oldest !== undefined) {
+      iconMemoryCache.delete(oldest)
+    }
+  }
+  iconMemoryCache.set(key, buffer)
+}
 
 /**
  * 根据平台提取图标并返回 PNG Buffer（同步）
@@ -80,16 +99,17 @@ export function registerIconScheme(): void {
  * 支持文件路径或文件扩展名（如 ".txt"）
  */
 export function getFileIconAsBase64(filePath: string): string {
-  // 命中内存缓存
+  // 命中内存缓存（刷新 LRU 顺序）
   const cached = iconMemoryCache.get(filePath)
   if (cached) {
+    setIconCache(filePath, cached)
     return `data:image/png;base64,${cached.toString('base64')}`
   }
 
   const buffer = extractIcon(filePath)
 
   // 写入内存缓存
-  iconMemoryCache.set(filePath, buffer)
+  setIconCache(filePath, buffer)
 
   return `data:image/png;base64,${buffer.toString('base64')}`
 }
@@ -108,9 +128,10 @@ export function registerIconProtocolForSession(targetSession: Electron.Session):
       const urlPath = request.url.replace('ztools-icon://', '')
       const iconPath = decodeURIComponent(urlPath)
 
-      // 命中内存缓存：直接返回
+      // 命中内存缓存：刷新 LRU 并返回
       const cached = iconMemoryCache.get(iconPath)
       if (cached) {
+        setIconCache(iconPath, cached)
         return createIconResponse(cached)
       }
 
@@ -118,7 +139,7 @@ export function registerIconProtocolForSession(targetSession: Electron.Session):
       const buffer = extractIcon(iconPath)
 
       // 写入内存缓存
-      iconMemoryCache.set(iconPath, buffer)
+      setIconCache(iconPath, buffer)
 
       return createIconResponse(buffer)
     } catch (error) {
