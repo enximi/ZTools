@@ -29,6 +29,10 @@ interface NativeAddon {
   ) => void
   getClipboardFiles: () => ClipboardFile[]
   setClipboardFiles: (files: Array<string | { path: string }>) => boolean
+  simulateMouseMove: (x: number, y: number) => boolean
+  simulateMouseClick: (x: number, y: number) => boolean
+  simulateMouseDoubleClick: (x: number, y: number) => boolean
+  simulateMouseRightClick: (x: number, y: number) => boolean
   startMouseMonitor: (
     buttonType: MouseButtonType,
     longPressMs: number,
@@ -301,6 +305,70 @@ export class WindowManager {
       throw new TypeError('key must be a non-empty string')
     }
     return (addon as NativeAddon).simulateKeyboardTap(key, ...modifiers)
+  }
+
+  /**
+   * 模拟鼠标移动到指定屏幕位置
+   * @param x 距离屏幕左侧的位置（像素）
+   * @param y 距离屏幕顶部的位置（像素）
+   * @returns 是否成功
+   */
+  static simulateMouseMove(x: number, y: number): boolean {
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      throw new TypeError('x and y must be numbers')
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new TypeError('x and y must be finite numbers')
+    }
+    return (addon as NativeAddon).simulateMouseMove(x, y)
+  }
+
+  /**
+   * 模拟鼠标左键单击
+   * @param x 距离屏幕左侧的位置（像素）
+   * @param y 距离屏幕顶部的位置（像素）
+   * @returns 是否成功
+   */
+  static simulateMouseClick(x: number, y: number): boolean {
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      throw new TypeError('x and y must be numbers')
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new TypeError('x and y must be finite numbers')
+    }
+    return (addon as NativeAddon).simulateMouseClick(x, y)
+  }
+
+  /**
+   * 模拟鼠标左键双击
+   * @param x 距离屏幕左侧的位置（像素）
+   * @param y 距离屏幕顶部的位置（像素）
+   * @returns 是否成功
+   */
+  static simulateMouseDoubleClick(x: number, y: number): boolean {
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      throw new TypeError('x and y must be numbers')
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new TypeError('x and y must be finite numbers')
+    }
+    return (addon as NativeAddon).simulateMouseDoubleClick(x, y)
+  }
+
+  /**
+   * 模拟鼠标右键单击
+   * @param x 距离屏幕左侧的位置（像素）
+   * @param y 距离屏幕顶部的位置（像素）
+   * @returns 是否成功
+   */
+  static simulateMouseRightClick(x: number, y: number): boolean {
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      throw new TypeError('x and y must be numbers')
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new TypeError('x and y must be finite numbers')
+    }
+    return (addon as NativeAddon).simulateMouseRightClick(x, y)
   }
 }
 

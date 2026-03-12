@@ -32,6 +32,26 @@ export class PluginInputAPI {
       event.returnValue = this.simulateKeyboardTap(key, modifiers)
     })
 
+    // 模拟鼠标移动
+    ipcMain.on('simulate-mouse-move', (event, x: number, y: number) => {
+      event.returnValue = this.simulateMouseMove(x, y)
+    })
+
+    // 模拟鼠标左键单击
+    ipcMain.on('simulate-mouse-click', (event, x: number, y: number) => {
+      event.returnValue = this.simulateMouseClick(x, y)
+    })
+
+    // 模拟鼠标左键双击
+    ipcMain.on('simulate-mouse-double-click', (event, x: number, y: number) => {
+      event.returnValue = this.simulateMouseDoubleClick(x, y)
+    })
+
+    // 模拟鼠标右键单击
+    ipcMain.on('simulate-mouse-right-click', (event, x: number, y: number) => {
+      event.returnValue = this.simulateMouseRightClick(x, y)
+    })
+
     // 检查当前插件是否处于开发模式
     ipcMain.on('is-dev', (event) => {
       event.returnValue = this.pluginManager?.isPluginDev(event.sender.id) ?? false
@@ -127,6 +147,42 @@ export class PluginInputAPI {
       return WindowManager.simulateKeyboardTap(key, ...modifiers)
     } catch (error: unknown) {
       console.error('[PluginInput] 模拟键盘按键失败:', error)
+      return false
+    }
+  }
+
+  private simulateMouseMove(x: number, y: number): boolean {
+    try {
+      return WindowManager.simulateMouseMove(x, y)
+    } catch (error: unknown) {
+      console.error('[PluginInput] 模拟鼠标移动失败:', error)
+      return false
+    }
+  }
+
+  private simulateMouseClick(x: number, y: number): boolean {
+    try {
+      return WindowManager.simulateMouseClick(x, y)
+    } catch (error: unknown) {
+      console.error('[PluginInput] 模拟鼠标单击失败:', error)
+      return false
+    }
+  }
+
+  private simulateMouseDoubleClick(x: number, y: number): boolean {
+    try {
+      return WindowManager.simulateMouseDoubleClick(x, y)
+    } catch (error: unknown) {
+      console.error('[PluginInput] 模拟鼠标双击失败:', error)
+      return false
+    }
+  }
+
+  private simulateMouseRightClick(x: number, y: number): boolean {
+    try {
+      return WindowManager.simulateMouseRightClick(x, y)
+    } catch (error: unknown) {
+      console.error('[PluginInput] 模拟鼠标右击失败:', error)
       return false
     }
   }
