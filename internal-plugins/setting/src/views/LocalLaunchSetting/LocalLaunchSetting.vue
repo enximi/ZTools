@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useToast, AdaptiveIcon } from '@/components'
 import { weightedSearch } from '@/utils'
-import { useHistoryState, useZtoolsSubInput } from '@/composables'
+import { useHistoryState, useJumpFunction, useZtoolsSubInput } from '@/composables'
 import { onBeforeRouteUpdate } from 'vue-router'
 
 const emit = defineEmits<{
@@ -272,21 +272,14 @@ function getTypeLabel(type: string): string {
 }
 
 // 处理对应 ztools code 进来的功能
-const handleJumpZtoolsCode = (): void => {
-  const state = useHistoryState<{ pendingFiles: any }>()
+useJumpFunction((state) => {
   if (state.pendingFiles && state.pendingFiles.length > 0) {
     consumePendingFiles(state.pendingFiles)
   }
-}
-
+})
 // 组件挂载时加载数据
 onMounted(() => {
   loadShortcuts()
-  handleJumpZtoolsCode()
-})
-
-onBeforeRouteUpdate(() => {
-  handleJumpZtoolsCode()
 })
 </script>
 <template>
