@@ -12,6 +12,7 @@ import { GLOBAL_SCROLLBAR_CSS } from '../core/globalStyles'
 import { isInternalPlugin } from '../core/internalPlugins'
 import pluginWindowManager from '../core/pluginWindowManager'
 import { registerIconProtocolForSession } from '../core/iconProtocol'
+import lmdbInstance from '../core/lmdb/lmdbInstance'
 import proxyManager from './proxyManager'
 import {
   EnterPayload,
@@ -66,6 +67,34 @@ export class PluginManager {
   private readPluginConfig(pluginPath: string): any {
     const pluginJsonPath = path.join(pluginPath, 'plugin.json')
     return JSON.parse(fsSync.readFileSync(pluginJsonPath, 'utf-8'))
+  }
+
+  /**
+   * 判断指定 feature 是否设置了 mainHide
+   * 同时检查 plugin.json 静态配置和数据库中的动态指令
+   */
+  private isFeatureMainHide(pluginPath: string, featureCode: string): boolean {
+    try {
+      // 1. 检查 plugin.json 中的静态 features
+      const pluginConfig = this.readPluginConfig(pluginPath)
+      const staticFeature = pluginConfig.features?.find((f: any) => f.code === featureCode)
+      if (staticFeature?.mainHide === true) return true
+
+      // 2. 检查数据库中的动态 features
+      const pluginName = pluginConfig.name
+      if (pluginName) {
+        const doc = lmdbInstance.get(`PLUGIN/${pluginName}/dynamic-features`)
+        if (doc?.data) {
+          const dynamicFeatures = JSON.parse(doc.data).features || []
+          const dynamicFeature = dynamicFeatures.find((f: any) => f.code === featureCode)
+          if (dynamicFeature?.mainHide === true) return true
+        }
+      }
+
+      return false
+    } catch {
+      return false
+    }
   }
 
   /**
@@ -396,6 +425,9 @@ export class PluginManager {
     // 恢复之前的高度或使用默认高度
     const isConfigHeadless = !pluginInfoFromDB?.main
     if (isConfigHeadless) {
+      this.setExpendHeight(0, false)
+    } else if (this.isFeatureMainHide(pluginPath, featureCode)) {
+      // mainHide 的 feature 不需要展示主界面，高度设为 0 避免闪烁
       this.setExpendHeight(0, false)
     } else {
       this.setExpendHeight(cached.height || this.pluginDefaultHeight, false)
@@ -1165,14 +1197,21 @@ export class PluginManager {
       }
 
       // 有界面插件
-      // 恢复高度: 优先使用缓存的高度，如果没有则使用默认高度
-      const cached = this.pluginViews.find((v) => v.path === pluginPath)
-      let targetHeight = cached?.height || this.pluginDefaultHeight
+      // mainHide 的 feature 不需要展示主界面，高度设为 0 避免闪烁
+      let targetHeight = 0
+      if (this.isFeatureMainHide(pluginPath, featureCode)) {
+        this.setExpendHeight(0, false)
+        console.log('[Plugin] mainHide feature, 设置高度为 0')
+      } else {
+        // 恢复高度: 优先使用缓存的高度，如果没有则使用默认高度
+        const cached = this.pluginViews.find((v) => v.path === pluginPath)
+        targetHeight = cached?.height || this.pluginDefaultHeight
 
-      // 如果目标高度无效（可能被错误置为0），重置为默认值
-      if (targetHeight <= 0) targetHeight = this.pluginDefaultHeight
+        // 如果目标高度无效（可能被错误置为0），重置为默认值
+        if (targetHeight <= 0) targetHeight = this.pluginDefaultHeight
 
-      this.setExpendHeight(targetHeight, true)
+        this.setExpendHeight(targetHeight, true)
+      }
 
       // 让插件视图获取焦点
       view.webContents.focus()

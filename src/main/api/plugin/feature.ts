@@ -8,6 +8,7 @@ interface DynamicFeature {
   explain?: string
   icon?: string
   platform?: string | string[]
+  mainHide?: boolean
   cmds: Array<string | { type: string; match: string; label: string; minLength?: number }>
 }
 
