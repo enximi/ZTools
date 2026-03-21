@@ -1,5 +1,5 @@
 import { platform } from '@electron-toolkit/utils'
-import { app, BrowserWindow, session } from 'electron'
+import { app, BrowserWindow, session, webContents } from 'electron'
 import log from 'electron-log'
 import path from 'path'
 import api from './api/index'
@@ -193,8 +193,19 @@ app.on('before-quit', (event) => {
     // 隐藏窗口
     windowManager.hideWindow(false)
   } else {
-    // 主动退出时，关闭所有插件
-    pluginManager.killAllPlugins()
+    // 主动退出时，同步销毁所有窗口
+    console.log('[Main] 开始同步销毁所有窗口...')
+
+    // 通过 Electron API 获取所有 webContents 并销毁（包括主窗口、分离窗口、插件视图）
+    const allContents = webContents.getAllWebContents()
+    console.log('[Main] 找到', allContents.length, '个 webContents')
+    for (const contents of allContents) {
+      if (!contents.isDestroyed()) {
+        ;(contents as any).destroy()
+      }
+    }
+
+    console.log('[Main] 所有窗口同步销毁完成')
   }
 })
 
