@@ -196,6 +196,9 @@ app.on('before-quit', (event) => {
     // 主动退出时，同步销毁所有窗口
     console.log('[Main] 开始同步销毁所有窗口...')
 
+    // 先清理悬浮球窗口（避免 close 事件干扰）
+    floatingBallManager.cleanup()
+
     // 通过 Electron API 获取所有 webContents 并销毁（包括主窗口、分离窗口、插件视图）
     const allContents = webContents.getAllWebContents()
     console.log('[Main] 找到', allContents.length, '个 webContents')

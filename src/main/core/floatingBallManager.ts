@@ -383,6 +383,8 @@ class FloatingBallManager {
   private destroyBallWindow(): void {
     if (this.ballWindow && !this.ballWindow.isDestroyed()) {
       this.enabled = false // 先标记为禁用，避免 close 事件 preventDefault
+      // 移除所有事件监听器，防止干扰销毁过程
+      this.ballWindow.removeAllListeners('close')
       this.ballWindow.destroy()
       this.ballWindow = null
       console.log('[FloatingBall] 悬浮球窗口已销毁')
