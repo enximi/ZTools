@@ -668,10 +668,16 @@ export const useCommandDataStore = defineStore('commandData', () => {
    * @param text 被匹配的文本
    * @param query 搜索关键词
    * @param matches 匹配信息
+   * @param command 指令对象（可选，用于类型加权）
    * @returns 分数（越高越好）
    */
-  function calculateMatchScore(text: string, query: string, matches?: MatchInfo[]): number {
-    return _calculateMatchScore(text, query, matches)
+  function calculateMatchScore(
+    text: string,
+    query: string,
+    matches?: MatchInfo[],
+    command?: Command
+  ): number {
+    return _calculateMatchScore(text, query, matches, command)
   }
 
   // 搜索
@@ -737,9 +743,9 @@ export const useCommandDataStore = defineStore('commandData', () => {
           }
         })
         .sort((a, b) => {
-          // 自定义排序：优先连续匹配
-          const scoreA = calculateMatchScore(a.name, query, a.matches)
-          const scoreB = calculateMatchScore(b.name, query, b.matches)
+          // 自定义排序：优先连续匹配，系统应用权重略高
+          const scoreA = calculateMatchScore(a.name, query, a.matches, a)
+          const scoreB = calculateMatchScore(b.name, query, b.matches, b)
           return scoreB - scoreA // 分数高的排前面
         })
 

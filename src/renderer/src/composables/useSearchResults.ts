@@ -229,9 +229,56 @@ export function useSearchResults(props: {
     return sortByUsage(deduplicated, usageStatsMap.value)
   })
 
-  // 列表模式：合并所有搜索结果
+  // 列表模式：合并所有搜索结果，按匹配分数排序
   const allListModeResults = computed(() => {
-    return [...bestSearchResults.value, ...bestMatches.value, ...recommendations.value]
+    const query = props.searchQuery.trim().toLowerCase()
+
+    // 合并所有结果
+    const allResults = [...bestSearchResults.value, ...bestMatches.value, ...recommendations.value]
+
+    if (!query) return allResults
+
+    // 去重
+    const seen = new Set<string>()
+    const deduped = allResults.filter((item) => {
+      const key = item.featureCode
+        ? `${item.path}:${item.featureCode}`
+        : `${item.name}|${item.path}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    // 排序：完全匹配 > 前缀匹配 > 系统应用 > 其他
+    return deduped.sort((a, b) => {
+      const nameA = a.name.toLowerCase()
+      const nameB = b.name.toLowerCase()
+
+      // 1. 完全匹配优先
+      const isExactA = nameA === query
+      const isExactB = nameB === query
+      if (isExactA && !isExactB) return -1
+      if (!isExactA && isExactB) return 1
+
+      // 2. 前缀匹配优先
+      const isPrefixA = nameA.startsWith(query)
+      const isPrefixB = nameB.startsWith(query)
+      if (isPrefixA && !isPrefixB) return -1
+      if (!isPrefixA && isPrefixB) return 1
+
+      // 3. 系统应用权重略高
+      const isAppA = a.type === 'direct' && a.subType === 'app'
+      const isAppB = b.type === 'direct' && b.subType === 'app'
+      if (isAppA && !isAppB) return -1
+      if (!isAppA && isAppB) return 1
+
+      // 4. 使用频率排序
+      const keyA = `${a.path}:${a.featureCode || ''}`
+      const keyB = `${b.path}:${b.featureCode || ''}`
+      const countA = usageStatsMap.value.get(keyA) || 0
+      const countB = usageStatsMap.value.get(keyB) || 0
+      return countB - countA
+    })
   })
 
   return {
