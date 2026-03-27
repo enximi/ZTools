@@ -452,6 +452,8 @@ export class AppsAPI {
         // 添加到历史记录
         this.addToHistory({ path: appPath, type: 'file', name, cmdType: 'text' })
 
+        // 隐藏当前插件视图（如果有）
+        this.pluginManager?.hidePluginView()
         // 通知渲染进程应用已启动（清空搜索框等）
         this.notifyRenderer('app-launched')
         this.mainWindow?.hide()
@@ -475,6 +477,8 @@ export class AppsAPI {
         // 添加到历史记录
         this.addToHistory({ path: appPath, type: 'app', name, cmdType: 'text' })
 
+        // 隐藏当前插件视图（如果有）
+        this.pluginManager?.hidePluginView()
         // 通知渲染进程应用已启动（清空搜索框等）
         this.notifyRenderer('app-launched')
         this.mainWindow?.hide()
@@ -532,6 +536,8 @@ export class AppsAPI {
       // 添加到历史记录
       this.addToHistory({ path: appPath, type: 'app', name, cmdType: 'text' })
 
+      // 隐藏当前插件视图（如果有）
+      this.pluginManager?.hidePluginView()
       // 通知渲染进程应用已启动
       this.notifyRenderer('app-launched')
       this.mainWindow?.hide()
