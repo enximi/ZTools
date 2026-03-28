@@ -149,6 +149,12 @@ declare global {
           success: boolean
           error?: string
         }>
+        exportAllPlugins: () => Promise<{
+          success: boolean
+          exportPath?: string
+          count?: number
+          error?: string
+        }>
         getPluginMemoryInfo: (pluginPath: string) => Promise<{
           success: boolean
           data?: {

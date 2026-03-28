@@ -24,6 +24,7 @@ const isKilling = ref(false)
 const isKillingAll = ref(false)
 const isReloading = ref(false)
 const isPackaging = ref(false)
+const isExportingAll = ref(false)
 // 是否正在执行“全部更新”
 const isUpgradingAll = ref(false)
 // “全部更新”当前完成数（用于进度展示）
@@ -563,6 +564,37 @@ async function handlePackagePlugin(plugin: any): Promise<void> {
   }
 }
 
+// 导出全部插件到下载目录
+async function handleExportAllPlugins(): Promise<void> {
+  if (isExportingAll.value) return
+
+  const confirmed = await confirm({
+    title: '导出全部插件',
+    message: '将导出全部已安装插件（不含开发中插件），是否继续？',
+    type: 'info',
+    confirmText: '导出',
+    cancelText: '取消'
+  })
+  if (!confirmed) return
+
+  isExportingAll.value = true
+  showMoreMenu.value = false
+
+  try {
+    const result = await window.ztools.internal.exportAllPlugins()
+    if (result.success) {
+      success(`导出成功，共 ${result.count} 个插件`)
+    } else {
+      error(`导出失败: ${result.error}`)
+    }
+  } catch (err: any) {
+    console.error('导出插件失败:', err)
+    error(`导出失败: ${err.message || '未知错误'}`)
+  } finally {
+    isExportingAll.value = false
+  }
+}
+
 // 处理 ESC 按键
 function handleKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
@@ -808,6 +840,28 @@ async function handleInstallFromNpm(data: {
                       ? `更新中... ${upgradeProgressDone}/${upgradeProgressTotal}`
                       : `全部更新 (${upgradablePluginsCount})`
                   }}
+                </button>
+                <button
+                  class="more-menu-item"
+                  :disabled="isExportingAll"
+                  @click="handleExportAllPlugins"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                  {{ isExportingAll ? '导出中...' : '导出全部插件' }}
                 </button>
                 <button
                   class="more-menu-item kill-all-item"

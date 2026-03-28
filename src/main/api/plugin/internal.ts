@@ -349,6 +349,13 @@ export class InternalPluginAPI {
       return await (pluginsAPI as any).packagePlugin(pluginPath)
     })
 
+    ipcMain.handle('internal:export-all-plugins', async (event) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:export-all-plugins')
+      }
+      return await (pluginsAPI as any).exportAllPlugins()
+    })
+
     ipcMain.handle('internal:get-plugin-memory-info', async (event, pluginPath: string) => {
       if (!requireInternalPlugin(this.pluginManager, event)) {
         throw new PermissionDeniedError('internal:get-plugin-memory-info')

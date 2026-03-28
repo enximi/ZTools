@@ -215,6 +215,8 @@ export class PluginsAPI {
       (_event, options: { packageName: string; useChinaMirror?: boolean }) =>
         this.installPluginFromNpm(options.packageName, options.useChinaMirror)
     )
+
+    ipcMain.handle('export-all-plugins', () => this.exportAllPlugins())
   }
 
   // 获取插件列表（过滤掉内置插件，用于插件中心显示）
@@ -1371,6 +1373,65 @@ export class PluginsAPI {
     } catch (error: unknown) {
       console.error('[Plugins] 打包插件失败:', error)
       return { success: false, error: error instanceof Error ? error.message : '打包失败' }
+    }
+  }
+
+  public async exportAllPlugins(): Promise<{
+    success: boolean
+    exportPath?: string
+    count?: number
+    error?: string
+  }> {
+    try {
+      const plugins: any = databaseAPI.dbGet('plugins')
+      if (!plugins || !Array.isArray(plugins)) {
+        return { success: false, error: '插件列表不存在' }
+      }
+
+      const exportablePlugins = plugins.filter(
+        (p: any) => !p.isDevelopment && !isInternalPlugin(p.name)
+      )
+
+      if (exportablePlugins.length === 0) {
+        return { success: false, error: '没有可导出的插件' }
+      }
+
+      const now = new Date()
+      const pad = (n: number): string => String(n).padStart(2, '0')
+      const timestamp =
+        `${now.getFullYear()}` +
+        `${pad(now.getMonth() + 1)}` +
+        `${pad(now.getDate())}` +
+        `${pad(now.getHours())}` +
+        `${pad(now.getMinutes())}` +
+        `${pad(now.getSeconds())}`
+
+      const downloadsDir = app.getPath('downloads')
+      const exportDir = path.join(downloadsDir, `ztools-plugins-${timestamp}`)
+
+      await fs.mkdir(exportDir, { recursive: true })
+
+      let successCount = 0
+      for (const plugin of exportablePlugins) {
+        const pluginPath: string = plugin.path
+        const baseName: string = plugin.name || path.basename(pluginPath)
+        const folderName: string = plugin.version ? `${baseName}-v${plugin.version}` : baseName
+        const destPath = path.join(exportDir, folderName)
+        try {
+          await fs.cp(pluginPath, destPath, { recursive: true })
+          successCount++
+        } catch (err) {
+          console.error(`[Plugins] 导出插件失败: ${folderName}`, err)
+        }
+      }
+
+      shell.showItemInFolder(exportDir)
+
+      console.log('[Plugins] 插件导出完成:', exportDir)
+      return { success: true, exportPath: exportDir, count: successCount }
+    } catch (error: unknown) {
+      console.error('[Plugins] 导出所有插件失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '导出失败' }
     }
   }
 
