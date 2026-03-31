@@ -1,8 +1,4 @@
-import { execSync } from 'child_process'
-import { app, protocol } from 'electron'
-import crypto from 'crypto'
-import fs from 'fs'
-import path from 'path'
+import { protocol } from 'electron'
 import { IconExtractor } from './native/index'
 
 /** 图标内存缓存（LRU 淘汰，Map 按插入顺序迭代） */
@@ -31,33 +27,11 @@ function setIconCache(key: string, buffer: Buffer): void {
  * 根据平台提取图标并返回 PNG Buffer（异步）
  */
 async function extractIcon(iconPath: string): Promise<Buffer> {
-  if (process.platform === 'darwin') {
-    const tempDir = path.join(app.getPath('temp'), 'ztools-icons')
-    fs.mkdirSync(tempDir, { recursive: true })
-
-    const hash = crypto.createHash('md5').update(iconPath).digest('hex')
-    const tempPngPath = path.join(tempDir, `${hash}.png`)
-
-    if (fs.existsSync(tempPngPath)) {
-      return fs.readFileSync(tempPngPath)
-    }
-
-    try {
-      execSync(
-        `sips -s format png '${iconPath}' --out '${tempPngPath}' --resampleHeightWidth 64 64 2>/dev/null`
-      )
-      return fs.readFileSync(tempPngPath)
-    } catch (error) {
-      console.error('[Main] sips 转换失败:', iconPath, error)
-      throw new Error('Icon conversion failed')
-    }
-  } else {
-    const iconBuffer = await IconExtractor.getFileIcon(iconPath)
-    if (!iconBuffer) {
-      throw new Error('Failed to extract icon')
-    }
-    return iconBuffer
+  const iconBuffer = await IconExtractor.getFileIcon(iconPath)
+  if (!iconBuffer) {
+    throw new Error('Failed to extract icon')
   }
+  return iconBuffer
 }
 
 /**

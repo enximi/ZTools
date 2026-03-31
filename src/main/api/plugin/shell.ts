@@ -80,14 +80,16 @@ export class PluginShellAPI {
       }
     })
 
-    // 获取文件系统图标（返回 base64 Data URL，异步）
-    ipcMain.handle('get-file-icon', async (_event, filePath: string) => {
-      try {
-        return await getFileIconAsBase64(filePath)
-      } catch (error: unknown) {
-        console.error('[PluginShell] 获取文件图标失败:', filePath, error)
-        return null
-      }
+    // 获取文件系统图标（返回 base64 Data URL，同步）
+    ipcMain.on('get-file-icon', (event, filePath: string) => {
+      getFileIconAsBase64(filePath)
+        .then((icon) => {
+          event.returnValue = icon
+        })
+        .catch((error: unknown) => {
+          console.error('[PluginShell] 获取文件图标失败:', filePath, error)
+          event.returnValue = null
+        })
     })
 
     // 播放系统提示音（同步）

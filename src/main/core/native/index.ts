@@ -593,8 +593,8 @@ export class IconExtractor {
    * if (icon) fs.writeFileSync('icon.png', icon);
    */
   static getFileIcon(filePath: string): Promise<Buffer> {
-    if (platform !== 'win32') {
-      throw new Error('getFileIcon is only supported on Windows')
+    if (platform !== 'win32' && platform !== 'darwin') {
+      throw new Error('getFileIcon is only supported on Windows and macOS')
     }
     if (typeof filePath !== 'string' || !filePath) {
       throw new TypeError('filePath must be a non-empty string')

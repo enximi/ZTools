@@ -389,7 +389,6 @@ export class SettingsAPI {
       if (!success) {
         return { success: false, error: '应用快捷键注册失败' }
       }
-      console.log(`成功注册应用快捷键: ${shortcut} -> ${target}`)
       return { success: true }
     } catch (error: unknown) {
       console.error('[Settings] 注册应用快捷键失败:', error)

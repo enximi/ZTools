@@ -45,6 +45,7 @@ import pluginFFmpegAPI from './plugin/ffmpeg'
 
 import httpServer from '../core/httpServer'
 import mcpServer from '../core/mcpServer'
+import { runStartupDataMigrations } from '../core/startupDataMigrations'
 import superPanelManager from '../core/superPanelManager'
 import translationManager from '../core/translationManager'
 
@@ -82,6 +83,8 @@ class APIManager {
 
     // 初始化共享API
     databaseAPI.init(pluginManager)
+    // 启动时统一迁移mac图标历史遗留数据
+    runStartupDataMigrations()
     clipboardAPI.init()
     setupImageAnalysisAPI()
 

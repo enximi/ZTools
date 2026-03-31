@@ -327,49 +327,6 @@ async function getAppDisplayInfo(appPath: string): Promise<LocalizedAppMetadata>
   return { name, aliases }
 }
 
-// 获取应用图标文件路径
-async function getIconFile(appPath: string): Promise<string> {
-  return new Promise((resolve) => {
-    const plistPath = path.join(appPath, 'Contents', 'Info.plist')
-
-    plist.readFile(plistPath, (err: any, data: any) => {
-      if (err || !data || !data.CFBundleIconFile) {
-        // 返回系统默认图标
-        return resolve(
-          '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns'
-        )
-      }
-
-      const iconFileName = data.CFBundleIconFile
-      const baseIconPath = path.join(appPath, 'Contents', 'Resources', iconFileName)
-
-      // 尝试多种扩展名
-      const iconCandidates = [
-        baseIconPath,
-        `${baseIconPath}.icns`,
-        `${baseIconPath}.tiff`,
-        `${baseIconPath}.png`
-      ]
-
-      // 同步检查文件存在性(在回调中使用同步方法)
-      for (const candidate of iconCandidates) {
-        try {
-          if (fsSync.existsSync(candidate)) {
-            return resolve(candidate)
-          }
-        } catch {
-          continue
-        }
-      }
-
-      // 都找不到,返回默认图标
-      resolve(
-        '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns'
-      )
-    })
-  })
-}
-
 export async function scanApplications(): Promise<Command[]> {
   try {
     console.time('[Scanner] 扫描应用')
@@ -408,11 +365,8 @@ export async function scanApplications(): Promise<Command[]> {
           (value) => extractAcronym(value) !== ''
         )
 
-        // 获取图标文件路径
-        const iconPath = await getIconFile(appPath)
-
-        // 使用 ztools-icon:// 协议（与 Windows 保持一致）
-        const iconUrl = `ztools-icon://${encodeURIComponent(iconPath)}`
+        // 应用程序直接使用 .app 路径交给原生层提取图标
+        const iconUrl = `ztools-icon://${encodeURIComponent(appPath)}`
 
         return {
           name,
@@ -422,13 +376,11 @@ export async function scanApplications(): Promise<Command[]> {
           acronym: acronymSource ? extractAcronym(acronymSource) : ''
         }
       } catch {
-        const defaultIconPath =
-          '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns'
         const name = path.basename(appPath, '.app')
         return {
           name,
           path: appPath,
-          icon: `ztools-icon://${encodeURIComponent(defaultIconPath)}`,
+          icon: `ztools-icon://${encodeURIComponent(appPath)}`,
           acronym: extractAcronym(name)
         }
       }
