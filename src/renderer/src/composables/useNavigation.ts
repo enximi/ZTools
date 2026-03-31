@@ -64,6 +64,24 @@ export function useNavigation(
         }
         break
       }
+      case 'Tab': {
+        event.preventDefault()
+        if (event.shiftKey) {
+          if (selectedRow.value > 0) {
+            selectedRow.value--
+          } else {
+            selectedRow.value = grid.length - 1
+          }
+        } else {
+          if (selectedRow.value < grid.length - 1) {
+            selectedRow.value++
+          } else {
+            selectedRow.value = 0
+          }
+        }
+        selectedCol.value = 0
+        break
+      }
     }
   }
 
@@ -131,6 +149,34 @@ export function useNavigation(
         const item = selectedItem.value
         if (item) {
           onSelect(item)
+        }
+        break
+      }
+      case 'Tab': {
+        event.preventDefault()
+        if (event.shiftKey) {
+          if (selectedCol.value > 0) {
+            selectedCol.value--
+          } else if (selectedRow.value > 0) {
+            selectedRow.value--
+            const prevRowItems = grid[selectedRow.value].items
+            selectedCol.value = prevRowItems.length - 1
+          } else {
+            selectedRow.value = grid.length - 1
+            const lastRowItems = grid[selectedRow.value].items
+            selectedCol.value = lastRowItems.length - 1
+          }
+        } else if (grid.length > 0 && selectedRow.value < grid.length) {
+          const currentRowItems = grid[selectedRow.value].items
+          if (selectedCol.value < currentRowItems.length - 1) {
+            selectedCol.value++
+          } else if (selectedRow.value < grid.length - 1) {
+            selectedRow.value++
+            selectedCol.value = 0
+          } else {
+            selectedRow.value = 0
+            selectedCol.value = 0
+          }
         }
         break
       }

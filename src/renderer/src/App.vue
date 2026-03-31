@@ -412,13 +412,20 @@ async function handleKeydown(event: KeyboardEvent): Promise<void> {
     return
   }
 
-  // Tab 键：如果配置了目标指令，则启动该指令
+  // Tab 键：根据设置执行目标指令或切换选中项
   if (event.key === 'Tab') {
-    const target = windowStore.tabTargetCommand
-    if (target && currentView.value === ViewMode.Search) {
-      event.preventDefault()
-      launchTabTarget(target, searchQuery.value)
-      return
+    if (currentView.value === ViewMode.Search) {
+      if (windowStore.tabKeyFunction === 'target-command') {
+        const target = windowStore.tabTargetCommand
+        if (target) {
+          event.preventDefault()
+          launchTabTarget(target, searchQuery.value)
+        }
+        return
+      } else {
+        searchResultsRef.value?.handleKeydown(event)
+        return
+      }
     }
   }
 
@@ -714,6 +721,12 @@ onMounted(async () => {
   window.ztools.onUpdateTabTarget((target: string) => {
     console.log('更新 Tab 键目标指令:', target)
     windowStore.updateTabTargetCommand(target)
+  })
+
+  // 监听 Tab 键功能更新事件
+  window.ztools.onUpdateTabKeyFunction((mode: 'navigate' | 'target-command') => {
+    console.log('更新 Tab 键功能:', mode)
+    windowStore.updateTabKeyFunction(mode)
   })
 
   // 监听空格打开指令配置更新事件

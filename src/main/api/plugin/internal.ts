@@ -673,6 +673,19 @@ export class InternalPluginAPI {
       return { success: true }
     })
 
+    // 通知主渲染进程更新 Tab 键功能配置
+    ipcMain.handle(
+      'internal:update-tab-key-function',
+      async (event, mode: 'navigate' | 'target-command') => {
+        if (!requireInternalPlugin(this.pluginManager, event)) {
+          throw new PermissionDeniedError('internal:update-tab-key-function')
+        }
+        // 广播到主渲染进程
+        this.mainWindow?.webContents.send('update-tab-key-function', mode)
+        return { success: true }
+      }
+    )
+
     // 通知主渲染进程更新空格打开指令配置
     ipcMain.handle('internal:update-space-open-command', async (event, enabled: boolean) => {
       if (!requireInternalPlugin(this.pluginManager, event)) {

@@ -36,6 +36,7 @@ export type AutoClearOption = 'immediately' | '1m' | '2m' | '3m' | '5m' | '10m' 
 
 // 搜索框模式选项
 export type SearchMode = 'aggregate' | 'list'
+export type TabKeyFunction = 'navigate' | 'target-command'
 export type BuiltInShortcutKey = 'search' | 'closePlugin' | 'killPlugin'
 
 // 更新下载状态
@@ -58,6 +59,7 @@ export const useWindowStore = defineStore('window', () => {
 
   // Tab 键目标指令
   const tabTargetCommand = ref('')
+  const tabKeyFunction = ref<TabKeyFunction>('navigate')
 
   // 空格打开指令
   const spaceOpenCommand = ref(false)
@@ -209,6 +211,10 @@ export const useWindowStore = defineStore('window', () => {
 
   function updateTabTargetCommand(value: string): void {
     tabTargetCommand.value = value
+  }
+
+  function updateTabKeyFunction(value: TabKeyFunction): void {
+    tabKeyFunction.value = value
   }
 
   function updateSpaceOpenCommand(value: boolean): void {
@@ -542,6 +548,11 @@ export const useWindowStore = defineStore('window', () => {
         if (data.searchMode) {
           searchMode.value = data.searchMode
         }
+        if (data.tabKeyFunction !== undefined) {
+          tabKeyFunction.value = data.tabKeyFunction
+        } else {
+          tabKeyFunction.value = data.tabTargetCommand ? 'target-command' : 'navigate'
+        }
         if (data.tabTargetCommand !== undefined) {
           tabTargetCommand.value = data.tabTargetCommand
         }
@@ -610,6 +621,8 @@ export const useWindowStore = defineStore('window', () => {
     updatePinnedRows,
     searchMode,
     updateSearchMode,
+    tabKeyFunction,
+    updateTabKeyFunction,
     tabTargetCommand,
     updateTabTargetCommand,
     spaceOpenCommand,

@@ -142,9 +142,9 @@
 
     <!-- 操作栏 -->
     <div ref="searchActionsRef" class="search-actions">
-      <!-- Tab 键目标提示（搜索模式下，且配置了 Tab 目标指令时显示） -->
-      <div v-if="tabTargetHint && currentView !== 'plugin' && modelValue" class="tab-target-hint">
-        <span class="tab-target-text">{{ tabTargetHint }}</span>
+      <!-- Tab 键功能提示 -->
+      <div v-if="tabHintText && currentView !== 'plugin' && modelValue" class="tab-target-hint">
+        <span class="tab-target-text">{{ tabHintText }}</span>
         <span class="tab-target-key">Tab</span>
       </div>
       <!-- 更新提示（有下载好的更新时显示） -->
@@ -293,8 +293,12 @@ const isDefaultAvatar = computed(() => {
 
 const isPluginLoading = computed(() => windowStore.pluginLoading)
 
-// Tab 键目标指令提示文字
-const tabTargetHint = computed(() => {
+// Tab 键功能提示文字
+const tabHintText = computed(() => {
+  if (windowStore.tabKeyFunction === 'navigate') {
+    return '切换选中'
+  }
+
   const target = windowStore.tabTargetCommand
   if (!target) return ''
   const parts = target.split('/')

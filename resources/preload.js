@@ -932,6 +932,9 @@ window.ztools = {
     // 通知主渲染进程更新搜索框模式
     updateSearchMode: async (mode) =>
       await electron.ipcRenderer.invoke('internal:update-search-mode', mode),
+    // 通知主渲染进程更新 Tab 键功能配置
+    updateTabKeyFunction: async (mode) =>
+      await electron.ipcRenderer.invoke('internal:update-tab-key-function', mode),
     // 通知主渲染进程更新 Tab 键目标指令
     updateTabTarget: async (target) =>
       await electron.ipcRenderer.invoke('internal:update-tab-target', target),

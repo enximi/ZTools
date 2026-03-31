@@ -207,6 +207,9 @@ const api = {
   onUpdateTabTarget: (callback: (target: string) => void) => {
     ipcRenderer.on('update-tab-target', (_event, target) => callback(target))
   },
+  onUpdateTabKeyFunction: (callback: (mode: 'navigate' | 'target-command') => void) => {
+    ipcRenderer.on('update-tab-key-function', (_event, mode) => callback(mode))
+  },
   onUpdateSpaceOpenCommand: (callback: (enabled: boolean) => void) => {
     ipcRenderer.on('update-space-open-command', (_event, enabled) => callback(enabled))
   },
@@ -591,6 +594,9 @@ declare global {
         callback: (data: { pluginPath: string; placeholder: string }) => void
       ) => void
       onUpdateSubInputVisible: (callback: (visible: boolean) => void) => void
+      onUpdateTabTarget: (callback: (target: string) => void) => void
+      onUpdateTabKeyFunction: (callback: (mode: 'navigate' | 'target-command') => void) => void
+      onUpdateSpaceOpenCommand: (callback: (enabled: boolean) => void) => void
       onUpdateShowRecentInSearch: (callback: (showRecentInSearch: boolean) => void) => void
       onUpdateMatchRecommendation: (callback: (showMatchRecommendation: boolean) => void) => void
       // 数据库相关（主程序专用，直接操作 ZTOOLS 命名空间）

@@ -75,6 +75,11 @@ const searchModeOptions = [
   { label: '列表模式', value: 'list' }
 ]
 
+const tabKeyFunctionOptions = [
+  { label: '切换选中', value: 'navigate' },
+  { label: '目标指令', value: 'target-command' }
+]
+
 const devToolsModeOptions = [
   { label: '独立窗口', value: 'detach' },
   { label: '靠右', value: 'right' },
@@ -134,6 +139,7 @@ const clipboardRetentionDays = ref(180)
 
 // Tab 键目标指令
 const tabTargetCommand = ref('')
+const tabKeyFunction = ref<'navigate' | 'target-command'>('navigate')
 
 // 空格打开指令
 const spaceOpenCommand = ref(false)
@@ -575,6 +581,17 @@ async function handleTabTargetChange(): Promise<void> {
     console.log('Tab 键目标指令已更新:', tabTargetCommand.value)
   } catch (error) {
     console.error('保存 Tab 键目标指令失败:', error)
+  }
+}
+
+// 处理 Tab 键功能变化
+async function handleTabKeyFunctionChange(): Promise<void> {
+  try {
+    await saveSettings()
+    await window.ztools.internal.updateTabKeyFunction(tabKeyFunction.value)
+    console.log('Tab 键功能已更新:', tabKeyFunction.value)
+  } catch (error) {
+    console.error('保存 Tab 键功能失败:', error)
   }
 }
 
@@ -1070,6 +1087,8 @@ async function loadSettings(): Promise<void> {
       primaryColor.value = data.primaryColor ?? 'blue'
       searchMode.value = data.searchMode ?? 'aggregate'
       autoCheckUpdate.value = data.autoCheckUpdate ?? true
+      tabKeyFunction.value =
+        data.tabKeyFunction ?? (data.tabTargetCommand ? 'target-command' : 'navigate')
       // Tab 键目标指令
       tabTargetCommand.value = data.tabTargetCommand ?? ''
       // 空格打开指令
@@ -1152,6 +1171,7 @@ async function saveSettings(): Promise<void> {
       recentRows: recentRows.value,
       pinnedRows: pinnedRows.value,
       searchMode: searchMode.value,
+      tabKeyFunction: tabKeyFunction.value,
       tabTargetCommand: tabTargetCommand.value,
       spaceOpenCommand: spaceOpenCommand.value,
       floatingBallDoubleClickCommand: floatingBallDoubleClickCommand.value,
@@ -1583,6 +1603,22 @@ onUnmounted(() => {
       </div>
 
       <div class="setting-item tab-target-setting-item">
+        <div class="setting-label">
+          <span>Tab 功能</span>
+          <span class="setting-desc">设置 Tab 键用于切换选中项，或直接进入指定指令</span>
+        </div>
+        <div class="setting-control-column">
+          <div class="setting-control">
+            <Dropdown
+              v-model="tabKeyFunction"
+              :options="tabKeyFunctionOptions"
+              @change="handleTabKeyFunctionChange"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div v-if="tabKeyFunction === 'target-command'" class="setting-item tab-target-setting-item">
         <div class="setting-label">
           <span>Tab 键目标指令</span>
           <span class="setting-desc"
