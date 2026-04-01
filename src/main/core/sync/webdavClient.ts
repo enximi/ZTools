@@ -28,6 +28,8 @@ function decodeDocPath(path: string): string {
  */
 export class WebDAVSyncClient {
   private client: WebDAVClient | null = null
+  /** 缓存已确认存在的目录路径，避免重复 PROPFIND 请求 */
+  private dirExistsCache = new Set<string>()
 
   /**
    * 初始化 WebDAV 客户端
@@ -37,6 +39,9 @@ export class WebDAVSyncClient {
       username: config.username,
       password: config.password
     })
+
+    // 重置目录缓存
+    this.dirExistsCache.clear()
 
     // 测试连接
     await this.testConnection()
@@ -67,41 +72,39 @@ export class WebDAVSyncClient {
   private async ensureRemoteDirectory(): Promise<void> {
     if (!this.client) return
 
-    const remotePath = '/ztools-sync'
-    const exists = await this.client.exists(remotePath)
-    if (!exists) {
-      await this.client.createDirectory(remotePath)
-    }
-
-    // 确保附件目录存在
-    const attachmentPath = '/ztools-sync/attachments'
-    const attachmentExists = await this.client.exists(attachmentPath)
-    if (!attachmentExists) {
-      await this.client.createDirectory(attachmentPath)
-    }
-
-    // 确保插件目录存在
-    const pluginsPath = '/ztools-sync/plugins'
-    const pluginsExists = await this.client.exists(pluginsPath)
-    if (!pluginsExists) {
-      await this.client.createDirectory(pluginsPath)
+    const dirs = ['/ztools-sync', '/ztools-sync/attachments', '/ztools-sync/plugins']
+    for (const dir of dirs) {
+      if (!this.dirExistsCache.has(dir)) {
+        const exists = await this.client.exists(dir)
+        if (!exists) {
+          await this.client.createDirectory(dir)
+        }
+        this.dirExistsCache.add(dir)
+      }
     }
   }
 
   /**
-   * 确保路径的父目录存在（递归创建）
+   * 确保路径的父目录存在（递归创建，带缓存）
    */
   private async ensureParentDir(filePath: string): Promise<void> {
     if (!this.client) return
     const dir = filePath.substring(0, filePath.lastIndexOf('/'))
-    if (!dir || dir === '/ztools-sync') return
+    if (!dir || dir === '/ztools-sync' || this.dirExistsCache.has(dir)) return
 
-    const exists = await this.client.exists(dir)
-    if (!exists) {
-      // 递归确保上级目录存在
-      await this.ensureParentDir(dir)
+    // 先递归确保上级目录存在
+    await this.ensureParentDir(dir)
+
+    try {
       await this.client.createDirectory(dir)
+    } catch (error: any) {
+      // 竞态条件：并发时其他请求可能已创建该目录，二次确认目录是否已存在
+      const exists = await this.client.exists(dir).catch(() => false)
+      if (!exists) {
+        throw error
+      }
     }
+    this.dirExistsCache.add(dir)
   }
 
   /**
@@ -170,8 +173,10 @@ export class WebDAVSyncClient {
 
       for (const item of contents) {
         if (item.type === 'directory') {
-          if (!excludeDirs.has(item.filename)) {
-            await walk(item.filename)
+          // 标准化路径：移除尾部斜杠，确保 excludeDirs 判断一致
+          const filename = item.filename.replace(/\/+$/, '')
+          if (!excludeDirs.has(filename)) {
+            await walk(filename)
           }
         } else if (item.type === 'file' && item.filename.endsWith('.json')) {
           // 从完整路径提取 docId：去掉 basePath/ 前缀和 .json 后缀
@@ -307,7 +312,8 @@ export class WebDAVSyncClient {
 
       for (const item of contents) {
         if (item.type === 'directory') {
-          await walk(item.filename)
+          const filename = item.filename.replace(/\/+$/, '')
+          await walk(filename)
         } else if (item.type === 'file' && item.filename.endsWith('.bin')) {
           const relativePath = item.filename.substring(basePath.length + 1)
           const encodedId = relativePath.replace(/\.bin$/, '')
