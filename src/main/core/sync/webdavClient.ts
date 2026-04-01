@@ -2,6 +2,28 @@ import { createClient, WebDAVClient } from 'webdav'
 import { SyncConfig, RemoteFileMeta, RemotePluginManifest } from './types'
 
 /**
+ * 将 docId 编码为 WebDAV 路径（保留目录结构）
+ * ZTOOLS/settings-general → ZTOOLS/settings-general
+ * 每段单独编码，/ 保留为路径分隔符
+ */
+function encodeDocPath(docId: string): string {
+  return docId
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/')
+}
+
+/**
+ * 从 WebDAV 路径还原 docId
+ */
+function decodeDocPath(path: string): string {
+  return path
+    .split('/')
+    .map((seg) => decodeURIComponent(seg))
+    .join('/')
+}
+
+/**
  * WebDAV 同步客户端
  */
 export class WebDAVSyncClient {
@@ -67,6 +89,22 @@ export class WebDAVSyncClient {
   }
 
   /**
+   * 确保路径的父目录存在（递归创建）
+   */
+  private async ensureParentDir(filePath: string): Promise<void> {
+    if (!this.client) return
+    const dir = filePath.substring(0, filePath.lastIndexOf('/'))
+    if (!dir || dir === '/ztools-sync') return
+
+    const exists = await this.client.exists(dir)
+    if (!exists) {
+      // 递归确保上级目录存在
+      await this.ensureParentDir(dir)
+      await this.client.createDirectory(dir)
+    }
+  }
+
+  /**
    * 上传文档到云端
    */
   async uploadDoc(doc: any): Promise<void> {
@@ -74,12 +112,13 @@ export class WebDAVSyncClient {
       throw new Error('WebDAV 客户端未初始化')
     }
 
-    // 使用 URL 编码避免路径问题（/ 会被编码为 %2F）
-    const safeDocId = encodeURIComponent(doc._id)
+    // 保留 docId 中的 / 作为目录结构，每段单独编码
+    const safeDocId = encodeDocPath(doc._id)
     const remotePath = `/ztools-sync/${safeDocId}.json`
     const content = JSON.stringify(doc, null, 2)
 
     try {
+      await this.ensureParentDir(remotePath)
       await this.client.putFileContents(remotePath, content, {
         overwrite: true
       })
@@ -97,8 +136,8 @@ export class WebDAVSyncClient {
       throw new Error('WebDAV 客户端未初始化')
     }
 
-    // 使用 URL 编码避免路径问题
-    const safeDocId = encodeURIComponent(docId)
+    // 保留目录结构，每段单独编码
+    const safeDocId = encodeDocPath(docId)
     const remotePath = `/ztools-sync/${safeDocId}.json`
     const exists = await this.client.exists(remotePath)
     if (!exists) return null
@@ -110,36 +149,45 @@ export class WebDAVSyncClient {
   }
 
   /**
-   * 获取云端文档列表（包含元数据）
+   * 获取云端文档列表（包含元数据，递归遍历子目录）
    */
   async listRemoteDocsWithMeta(): Promise<RemoteFileMeta[]> {
     if (!this.client) {
       throw new Error('WebDAV 客户端未初始化')
     }
 
-    const response = await this.client.getDirectoryContents('/ztools-sync', {
-      details: true
-    })
+    const results: RemoteFileMeta[] = []
+    const basePath = '/ztools-sync'
+    // 排除附件和插件目录
+    const excludeDirs = new Set([`${basePath}/attachments`, `${basePath}/plugins`])
 
-    // 当 details: true 时，返回的是 { data: FileStat[] } 格式
-    const contents = Array.isArray(response) ? response : (response as any).data
+    const walk = async (dirPath: string): Promise<void> => {
+      const response = await this.client!.getDirectoryContents(dirPath, {
+        details: true
+      })
+      const contents = Array.isArray(response) ? response : (response as any).data
+      if (!Array.isArray(contents)) return
 
-    if (!Array.isArray(contents)) {
-      console.error('[WebDAV] getDirectoryContents 返回格式异常:', response)
-      return []
+      for (const item of contents) {
+        if (item.type === 'directory') {
+          if (!excludeDirs.has(item.filename)) {
+            await walk(item.filename)
+          }
+        } else if (item.type === 'file' && item.filename.endsWith('.json')) {
+          // 从完整路径提取 docId：去掉 basePath/ 前缀和 .json 后缀
+          const relativePath = item.filename.substring(basePath.length + 1)
+          const encodedDocId = relativePath.replace(/\.json$/, '')
+          const docId = decodeDocPath(encodedDocId)
+          results.push({
+            docId,
+            lastModified: new Date(item.lastmod).getTime()
+          })
+        }
+      }
     }
 
-    return contents
-      .filter((item) => item.type === 'file' && item.filename.endsWith('.json'))
-      .map((item) => {
-        // 从文件名解码得到原始 docId
-        const encodedDocId = item.basename.replace('.json', '')
-        const docId = decodeURIComponent(encodedDocId)
-        return {
-          docId,
-          lastModified: new Date(item.lastmod).getTime()
-        }
-      })
+    await walk(basePath)
+    return results
   }
 
   /**
@@ -150,8 +198,8 @@ export class WebDAVSyncClient {
       throw new Error('WebDAV 客户端未初始化')
     }
 
-    // 使用 URL 编码避免路径问题
-    const safeDocId = encodeURIComponent(docId)
+    // 保留目录结构，每段单独编码
+    const safeDocId = encodeDocPath(docId)
     const remotePath = `/ztools-sync/${safeDocId}.json`
     await this.client.deleteFile(remotePath)
   }
@@ -164,11 +212,12 @@ export class WebDAVSyncClient {
       throw new Error('WebDAV 客户端未初始化')
     }
 
-    // 使用 URL 编码避免路径问题（/ 会被编码为 %2F，: 会被编码为 %3A）
-    const safeDocId = encodeURIComponent(docId)
+    // 保留目录结构，每段单独编码
+    const safeDocId = encodeDocPath(docId)
 
     // 上传二进制数据
     const dataPath = `/ztools-sync/attachments/${safeDocId}.bin`
+    await this.ensureParentDir(dataPath)
     await this.client.putFileContents(dataPath, data, {
       overwrite: true
     })
@@ -190,8 +239,8 @@ export class WebDAVSyncClient {
       throw new Error('WebDAV 客户端未初始化')
     }
 
-    // 使用 URL 编码避免路径问题
-    const safeDocId = encodeURIComponent(docId)
+    // 保留目录结构，每段单独编码
+    const safeDocId = encodeDocPath(docId)
     const dataPath = `/ztools-sync/attachments/${safeDocId}.bin`
     const metaPath = `/ztools-sync/attachments/${safeDocId}.meta.json`
 
@@ -229,8 +278,8 @@ export class WebDAVSyncClient {
       throw new Error('WebDAV 客户端未初始化')
     }
 
-    // 使用 URL 编码避免路径问题
-    const safeDocId = encodeURIComponent(docId)
+    // 保留目录结构，每段单独编码
+    const safeDocId = encodeDocPath(docId)
     const remotePath = `/ztools-sync/attachments/${safeDocId}.bin`
     const exists = await this.client.exists(remotePath)
     if (exists) {
@@ -239,32 +288,36 @@ export class WebDAVSyncClient {
   }
 
   /**
-   * 获取云端附件列表
+   * 获取云端附件列表（递归遍历子目录）
    */
   async listRemoteAttachments(): Promise<string[]> {
     if (!this.client) {
       throw new Error('WebDAV 客户端未初始化')
     }
 
-    const response = await this.client.getDirectoryContents('/ztools-sync/attachments', {
-      details: true
-    })
+    const results: string[] = []
+    const basePath = '/ztools-sync/attachments'
 
-    // 当 details: true 时，返回的是 { data: FileStat[] } 格式
-    const contents = Array.isArray(response) ? response : (response as any).data
+    const walk = async (dirPath: string): Promise<void> => {
+      const response = await this.client!.getDirectoryContents(dirPath, {
+        details: true
+      })
+      const contents = Array.isArray(response) ? response : (response as any).data
+      if (!Array.isArray(contents)) return
 
-    if (!Array.isArray(contents)) {
-      console.error('[WebDAV] getDirectoryContents 返回格���异常:', response)
-      return []
+      for (const item of contents) {
+        if (item.type === 'directory') {
+          await walk(item.filename)
+        } else if (item.type === 'file' && item.filename.endsWith('.bin')) {
+          const relativePath = item.filename.substring(basePath.length + 1)
+          const encodedId = relativePath.replace(/\.bin$/, '')
+          results.push(decodeDocPath(encodedId))
+        }
+      }
     }
 
-    return contents
-      .filter((item) => item.type === 'file' && item.filename.endsWith('.bin'))
-      .map((item) => {
-        // 从文件名解码得到原始 attachmentId
-        const encodedId = item.basename.replace('.bin', '')
-        return decodeURIComponent(encodedId)
-      })
+    await walk(basePath)
+    return results
   }
 
   // ==================== 插件同步相关方法 ====================
