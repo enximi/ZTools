@@ -11,13 +11,11 @@ interface LastMatchState {
   timestamp: number
 }
 
-type PluginVariantRefInput =
-  | string
-  | {
-      pluginName: string
-      source: 'installed' | 'development'
-      path?: string
-    }
+type PluginVariantRefInput = {
+  pluginName: string
+  source: 'installed' | 'development'
+  path?: string
+}
 
 declare global {
   interface Window {

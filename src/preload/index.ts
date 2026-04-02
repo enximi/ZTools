@@ -8,13 +8,11 @@ export interface Command {
   subType?: string
 }
 
-type PluginVariantRefInput =
-  | string
-  | {
-      pluginName: string
-      source: 'installed' | 'development'
-      path?: string
-    }
+type PluginVariantRefInput = {
+  pluginName: string
+  source: 'installed' | 'development'
+  path?: string
+}
 
 const api = {
   getApps: () => ipcRenderer.invoke('get-apps'),

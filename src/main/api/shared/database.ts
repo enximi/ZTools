@@ -50,7 +50,12 @@ export class DatabaseAPI {
     prefix: string
     isHostData: boolean
   } | null {
-    if (target === 'ZTOOLS') {
+    const variantRef = normalizePluginVariantRef(target)
+    if (!variantRef) {
+      return null
+    }
+
+    if (variantRef.pluginName === 'ZTOOLS') {
       return {
         pluginName: 'ZTOOLS',
         pluginSource: 'installed',
@@ -58,11 +63,6 @@ export class DatabaseAPI {
         prefix: 'ZTOOLS/',
         isHostData: true
       }
-    }
-
-    const variantRef = normalizePluginVariantRef(target)
-    if (!variantRef) {
-      return null
     }
 
     return {
@@ -413,20 +413,17 @@ export class DatabaseAPI {
     })
 
     // 获取指定插件的所有文档 key（包括附件）
-    ipcMain.handle('get-plugin-doc-keys', async (_event, pluginRef: PluginVariantRef | string) => {
+    ipcMain.handle('get-plugin-doc-keys', async (_event, pluginRef: PluginVariantRef) => {
       return await this._getPluginDocKeys(pluginRef)
     })
 
-    // 获取指定插件的指定文档
-    ipcMain.handle(
-      'get-plugin-doc',
-      async (_event, pluginRef: PluginVariantRef | string, key: string) => {
-        return await this._getPluginDoc(pluginRef, key)
-      }
-    )
+    // 获取指定插件的文档内容
+    ipcMain.handle('get-plugin-doc', async (_event, pluginRef: PluginVariantRef, key: string) => {
+      return await this._getPluginDoc(pluginRef, key)
+    })
 
-    // 获取指定插件的指定文档
-    ipcMain.handle('clear-plugin-data', async (_event, pluginRef: PluginVariantRef | string) => {
+    // 清空指定插件的所有数据
+    ipcMain.handle('clear-plugin-data', async (_event, pluginRef: PluginVariantRef) => {
       return await this._clearPluginData(pluginRef)
     })
   }
@@ -794,7 +791,7 @@ export class DatabaseAPI {
    * 公共方法：获取指定插件的文档或附件内容
    */
   public async getPluginDoc(
-    pluginRef: PluginVariantRef | string,
+    pluginRef: PluginVariantRef,
     key: string
   ): Promise<{ success: boolean; data?: any; type?: string; error?: string }> {
     return await this._getPluginDoc(pluginRef, key)
@@ -804,7 +801,7 @@ export class DatabaseAPI {
    * 公共方法：清空指定插件的所有数据
    */
   public async clearPluginData(
-    pluginRef: PluginVariantRef | string
+    pluginRef: PluginVariantRef
   ): Promise<{ success: boolean; deletedCount?: number; error?: string }> {
     return await this._clearPluginData(pluginRef)
   }

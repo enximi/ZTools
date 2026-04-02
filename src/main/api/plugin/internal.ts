@@ -57,7 +57,7 @@ function formatTimestamp(date: Date): string {
  * 将指定插件的所有文档导出为 JSON 文件到目标目录
  */
 async function exportPluginDocsToDir(
-  pluginRef: PluginVariantRef | string,
+  pluginRef: PluginVariantRef,
   targetDir: string
 ): Promise<void> {
   const keysResult = await databaseAPI.getPluginDocKeys(pluginRef)
@@ -82,14 +82,10 @@ async function exportPluginDocsToDir(
  * 生成导出目录名。
  * 开发版追加 `-dev` 后缀，避免与安装版同名目录互相覆盖。
  */
-function getPluginExportFolderName(pluginRef: PluginVariantRef | string): string {
-  if (pluginRef === 'ZTOOLS') {
-    return 'ZTOOLS'
-  }
-
+function getPluginExportFolderName(pluginRef: PluginVariantRef): string {
   const normalized = normalizePluginVariantRef(pluginRef)
   if (!normalized) {
-    return String(pluginRef)
+    return pluginRef.pluginName || 'unknown'
   }
 
   return normalized.source === 'development'
@@ -449,19 +445,16 @@ export class InternalPluginAPI {
       }
     )
 
-    ipcMain.handle(
-      'internal:get-plugin-doc-keys',
-      async (event, pluginRef: PluginVariantRef | string) => {
-        if (!requireInternalPlugin(this.pluginManager, event)) {
-          throw new PermissionDeniedError('internal:get-plugin-doc-keys')
-        }
-        return await databaseAPI.getPluginDocKeys(pluginRef)
+    ipcMain.handle('internal:get-plugin-doc-keys', async (event, pluginRef: PluginVariantRef) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:get-plugin-doc-keys')
       }
-    )
+      return await databaseAPI.getPluginDocKeys(pluginRef)
+    })
 
     ipcMain.handle(
       'internal:get-plugin-doc',
-      async (event, pluginRef: PluginVariantRef | string, docKey: string) => {
+      async (event, pluginRef: PluginVariantRef, docKey: string) => {
         if (!requireInternalPlugin(this.pluginManager, event)) {
           throw new PermissionDeniedError('internal:get-plugin-doc')
         }
@@ -476,37 +469,31 @@ export class InternalPluginAPI {
       return await databaseAPI.getPluginDataStats()
     })
 
-    ipcMain.handle(
-      'internal:clear-plugin-data',
-      async (event, pluginRef: PluginVariantRef | string) => {
-        if (!requireInternalPlugin(this.pluginManager, event)) {
-          throw new PermissionDeniedError('internal:clear-plugin-data')
-        }
-        return await databaseAPI.clearPluginData(pluginRef)
+    ipcMain.handle('internal:clear-plugin-data', async (event, pluginRef: PluginVariantRef) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:clear-plugin-data')
       }
-    )
+      return await databaseAPI.clearPluginData(pluginRef)
+    })
 
-    ipcMain.handle(
-      'internal:export-plugin-data',
-      async (event, pluginRef: PluginVariantRef | string) => {
-        if (!requireInternalPlugin(this.pluginManager, event)) {
-          throw new PermissionDeniedError('internal:export-plugin-data')
-        }
-        try {
-          const ts = formatTimestamp(new Date())
-          const downloadsDir = app.getPath('downloads')
-          const safePluginName = getPluginExportFolderName(pluginRef).replace(/[/\\:*?"<>|]/g, '_')
-          const exportDir = path.join(downloadsDir, `${safePluginName}-${ts}`)
-          await fs.promises.mkdir(exportDir, { recursive: true })
-          await exportPluginDocsToDir(pluginRef, exportDir)
-          shell.showItemInFolder(exportDir)
-          return { success: true, folderPath: exportDir }
-        } catch (error: unknown) {
-          console.error('[Internal API] 导出插件数据失败:', error)
-          return { success: false, error: error instanceof Error ? error.message : '导出失败' }
-        }
+    ipcMain.handle('internal:export-plugin-data', async (event, pluginRef: PluginVariantRef) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:export-plugin-data')
       }
-    )
+      try {
+        const ts = formatTimestamp(new Date())
+        const downloadsDir = app.getPath('downloads')
+        const safePluginName = getPluginExportFolderName(pluginRef).replace(/[/\\:*?"<>|]/g, '_')
+        const exportDir = path.join(downloadsDir, `${safePluginName}-${ts}`)
+        await fs.promises.mkdir(exportDir, { recursive: true })
+        await exportPluginDocsToDir(pluginRef, exportDir)
+        shell.showItemInFolder(exportDir)
+        return { success: true, folderPath: exportDir }
+      } catch (error: unknown) {
+        console.error('[Internal API] 导出插件数据失败:', error)
+        return { success: false, error: error instanceof Error ? error.message : '导出失败' }
+      }
+    })
 
     ipcMain.handle('internal:export-all-data', async (event) => {
       if (!requireInternalPlugin(this.pluginManager, event)) {
@@ -528,9 +515,9 @@ export class InternalPluginAPI {
         await fs.promises.mkdir(rootDir, { recursive: true })
 
         for (const plugin of plugins) {
-          const pluginRef: PluginVariantRef | 'ZTOOLS' =
+          const pluginRef: PluginVariantRef =
             plugin.pluginName === 'ZTOOLS'
-              ? 'ZTOOLS'
+              ? { pluginName: 'ZTOOLS', source: 'installed' }
               : {
                   pluginName: plugin.pluginName,
                   source: plugin.pluginSource === 'development' ? 'development' : 'installed'
