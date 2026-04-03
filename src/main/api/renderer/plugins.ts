@@ -40,7 +40,11 @@ import {
   type DevPluginRegistryDoc,
   type DevProjectLocalBinding
 } from './pluginDevelopmentRegistry'
-import { getPluginDataPrefix, toDevPluginName } from '../../../shared/pluginRuntimeNamespace'
+import {
+  getPluginDataPrefix,
+  isDevelopmentPluginName,
+  toDevPluginName
+} from '../../../shared/pluginRuntimeNamespace'
 
 // 插件目录
 const PLUGIN_DIR = path.join(app.getPath('userData'), 'plugins')
@@ -853,8 +857,11 @@ export class PluginsAPI {
     existingPlugins: any[]
   ): { valid: boolean; error?: string } {
     // 检查 title 是否冲突（如果有 title 字段）
+    // 排除开发版插件（name 以 __dev 结尾），因为开发版和安装版可以共存，title 相同是合理的
     if (pluginConfig.title) {
-      const titleConflict = existingPlugins.find((p: any) => p.title === pluginConfig.title)
+      const titleConflict = existingPlugins.find(
+        (p: any) => p.title === pluginConfig.title && !isDevelopmentPluginName(p.name)
+      )
       if (titleConflict) {
         return {
           valid: false,
