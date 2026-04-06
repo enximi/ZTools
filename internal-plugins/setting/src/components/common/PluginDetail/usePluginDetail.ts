@@ -14,12 +14,10 @@ export interface UsePluginDetailOptions {
   isRunning?: Ref<boolean | undefined>
   /** 是否显示留言 Tab */
   showComments?: boolean
-  /** 是否显示导出数据按钮 */
-  showExportData?: boolean
 }
 
 export function usePluginDetail(options: UsePluginDetailOptions) {
-  const { plugin, isRunning, showComments = false, showExportData = false } = options
+  const { plugin, isRunning, showComments = false } = options
   const { success, error, confirm } = useToast()
 
   // 插件设置状态
@@ -153,7 +151,6 @@ export function usePluginDetail(options: UsePluginDetailOptions) {
   const currentDocContent = ref<any>(null)
   const currentDocType = ref<'document' | 'attachment'>('document')
   const isClearing = ref(false)
-  const isExporting = ref(false)
 
   // 内存信息状态
   const memoryInfo = ref<{ private: number; shared: number; total: number } | null>(null)
@@ -289,26 +286,6 @@ export function usePluginDetail(options: UsePluginDetailOptions) {
       error(`清除失败: ${err.message || '未知错误'}`)
     } finally {
       isClearing.value = false
-    }
-  }
-
-  // 导出插件全部数据
-  async function handleExportAllData(): Promise<void> {
-    if (!plugin.value.name || !currentPluginName.value || isExporting.value) return
-
-    isExporting.value = true
-    try {
-      const result = await window.ztools.internal.exportPluginData(currentPluginName.value)
-      if (result.success) {
-        success('数据已导出到下载目录')
-      } else {
-        error(`导出失败: ${result.error}`)
-      }
-    } catch (err: any) {
-      console.error('导出插件数据失败:', err)
-      error(`导出失败: ${err.message || '未知错误'}`)
-    } finally {
-      isExporting.value = false
     }
   }
 
@@ -555,9 +532,7 @@ export function usePluginDetail(options: UsePluginDetailOptions) {
     currentDocContent,
     currentDocType,
     isClearing,
-    isExporting,
     handleClearAllData,
-    handleExportAllData,
     toggleDataDetail,
 
     // 内存

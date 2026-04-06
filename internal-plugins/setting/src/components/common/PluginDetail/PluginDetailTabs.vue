@@ -19,15 +19,12 @@ defineProps<{
   currentDocContent: any
   currentDocType: 'document' | 'attachment'
   isClearing: boolean
-  isExporting?: boolean
-  showExportData?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'switch-tab', tabId: TabId): void
   (e: 'toggle-data-detail', item: DocItem): void
   (e: 'clear-all-data'): void
-  (e: 'export-all-data'): void
 }>()
 
 function cmdKey(cmd: any): string {
@@ -133,14 +130,6 @@ function formatDate(dateStr?: string): string {
         </div>
         <div v-else-if="docKeys && docKeys.length > 0" class="data-container">
           <div class="data-header-actions">
-            <button
-              v-if="showExportData"
-              class="btn btn-sm btn-secondary"
-              :disabled="isExporting"
-              @click="emit('export-all-data')"
-            >
-              {{ isExporting ? '导出中...' : '导出全部数据' }}
-            </button>
             <button
               class="btn btn-sm btn-danger"
               :disabled="isClearing"

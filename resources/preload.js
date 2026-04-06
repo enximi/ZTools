@@ -878,9 +878,6 @@ window.ztools = {
       await electron.ipcRenderer.invoke('internal:get-plugin-data-stats'),
     clearPluginData: async (pluginRef) =>
       await electron.ipcRenderer.invoke('internal:clear-plugin-data', pluginRef),
-    exportPluginData: async (pluginRef) =>
-      await electron.ipcRenderer.invoke('internal:export-plugin-data', pluginRef),
-    exportAllData: async () => await electron.ipcRenderer.invoke('internal:export-all-data'),
     exportAllPlugins: async () => await electron.ipcRenderer.invoke('internal:export-all-plugins'),
     getPluginMemoryInfo: async (pluginPath) =>
       await electron.ipcRenderer.invoke('internal:get-plugin-memory-info', pluginPath),

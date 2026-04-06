@@ -32,7 +32,6 @@ defineEmits<{
     :is-disabled="isDisabled"
     :show-pin-button="true"
     :show-disable-toggle="true"
-    :show-export-data="true"
     :show-size="false"
     @back="$emit('back')"
     @open="$emit('open')"

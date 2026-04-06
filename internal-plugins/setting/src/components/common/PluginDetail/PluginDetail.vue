@@ -18,7 +18,6 @@ const props = defineProps<{
   showPinButton?: boolean
   showDisableToggle?: boolean
   showComments?: boolean
-  showExportData?: boolean
   showSize?: boolean
 }>()
 
@@ -65,9 +64,7 @@ const {
   currentDocContent,
   currentDocType,
   isClearing,
-  isExporting,
   handleClearAllData,
-  handleExportAllData,
   toggleDataDetail,
   // 内存
   memoryInfo,
@@ -79,8 +76,7 @@ const {
 } = usePluginDetail({
   plugin: pluginRef,
   isRunning: isRunningRef,
-  showComments: props.showComments,
-  showExportData: props.showExportData
+  showComments: props.showComments
 })
 
 function onSwitchTab(tabId: TabId): void {
@@ -193,12 +189,9 @@ function onSwitchTab(tabId: TabId): void {
       :current-doc-content="currentDocContent"
       :current-doc-type="currentDocType"
       :is-clearing="isClearing"
-      :is-exporting="isExporting"
-      :show-export-data="showExportData"
       @switch-tab="onSwitchTab"
       @toggle-data-detail="toggleDataDetail"
       @clear-all-data="handleClearAllData"
-      @export-all-data="handleExportAllData"
     >
       <template #extra-tabs>
         <slot name="extra-tabs" />

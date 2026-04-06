@@ -172,16 +172,6 @@ declare global {
           deletedCount?: number
           error?: string
         }>
-        exportPluginData: (pluginName: string) => Promise<{
-          success: boolean
-          folderPath?: string
-          error?: string
-        }>
-        exportAllData: () => Promise<{
-          success: boolean
-          folderPath?: string
-          error?: string
-        }>
         exportAllPlugins: () => Promise<{
           success: boolean
           exportPath?: string
