@@ -17,6 +17,11 @@ const MODIFIER_KEYCODES: Record<number, string> = {
   [UiohookKey.ShiftRight]: 'Shift'
 }
 
+// macOS 下 Option 与 Alt 是同一物理键，统一规范化为 'Alt'
+function normalizeModifier(modifier: string): string {
+  return modifier === 'Option' ? 'Alt' : modifier
+}
+
 /**
  * 双击修饰键检测管理器
  * 使用 uiohook-napi 全局监听键盘事件，检测修饰键的双击模式
@@ -40,7 +45,7 @@ class DoubleTapManager {
    * @param callback 双击时触发的回调
    */
   register(modifier: string, callback: () => void): void {
-    this.handlers.push({ modifier, callback })
+    this.handlers.push({ modifier: normalizeModifier(modifier), callback })
     this.ensureStarted()
   }
 
@@ -48,7 +53,8 @@ class DoubleTapManager {
    * 注销指定修饰键的所有回调
    */
   unregister(modifier: string): void {
-    this.handlers = this.handlers.filter((h) => h.modifier !== modifier)
+    const normalized = normalizeModifier(modifier)
+    this.handlers = this.handlers.filter((h) => h.modifier !== normalized)
     if (this.handlers.length === 0) {
       this.stop()
     }
@@ -66,7 +72,7 @@ class DoubleTapManager {
    * 检查是否有指定修饰键的已注册回调
    */
   has(modifier: string): boolean {
-    return this.handlers.some((h) => h.modifier === modifier)
+    return this.handlers.some((h) => h.modifier === normalizeModifier(modifier))
   }
 
   private ensureStarted(): void {
