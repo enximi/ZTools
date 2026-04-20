@@ -732,7 +732,7 @@ export class UpdaterAPI {
         this.closeUpdateWindow()
         this.windowsDownloadInProgress = false
         this.windowsInstallAfterDownload = false
-        this.windowsUpdater!.quitAndInstall(true, true)
+        this.windowsUpdater!.quitAndInstall(false)
         return { success: true }
       }
 
