@@ -1,6 +1,8 @@
 appId: link.eiot.ztools
 productName: ZTools
-publish: null
+publish:
+  provider: generic
+  url: https://github.com/ZToolsCenter/ZTools/releases/latest/download
 directories:
   buildResources: build
 files:

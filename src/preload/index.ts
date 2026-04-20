@@ -303,7 +303,7 @@ const api = {
     installDownloadedUpdate: () => ipcRenderer.invoke('updater:install-downloaded-update'),
     getDownloadStatus: () => ipcRenderer.invoke('updater:get-download-status')
   },
-  onUpdateDownloaded: (callback: (data: { version: string; changelog: string[] }) => void) => {
+  onUpdateDownloaded: (callback: (data: { version: string; changelog: string }) => void) => {
     ipcRenderer.on('update-downloaded', (_event, data) => callback(data))
   },
   onUpdateDownloadStart: (callback: (data: { version: string }) => void) => {

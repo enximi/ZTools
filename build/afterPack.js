@@ -155,14 +155,13 @@ module.exports = async function (context) {
     }
   }
 
-  // 复制升级程序
-  console.log('\n开始复制升级程序...')
-  const updaterDir = path.resolve(__dirname, '../updater')
+  // 复制 macOS 升级程序
+  if (context.electronPlatformName === 'darwin') {
+    console.log('\n开始复制升级程序...')
+    const updaterDir = path.resolve(__dirname, '../updater')
 
-  try {
-    if (context.electronPlatformName === 'darwin') {
+    try {
       const safeArch = context.arch === 3 || context.arch === 'arm64' ? 'arm64' : 'amd64'
-
       const appName = context.packager.appInfo.productFilename
       const appPath = path.join(context.appOutDir, `${appName}.app`)
       const dest = path.join(appPath, 'Contents', 'MacOS', 'ztools-updater')
@@ -175,19 +174,9 @@ module.exports = async function (context) {
       } else {
         console.error(`未找到 updater 文件: ${src}`)
       }
-    } else if (context.electronPlatformName === 'win32') {
-      const src = path.join(updaterDir, 'win-amd64', 'ztools-agent.exe')
-      const dest = path.join(context.appOutDir, 'ztools-agent.exe')
-
-      if (await pathExists(src)) {
-        await copy(src, dest)
-        console.log(`已复制 agent 到: ${dest}`)
-      } else {
-        console.error(`未找到 agent 文件: ${src}`)
-      }
+    } catch (err) {
+      console.error('复制升级程序失败:', err)
     }
-  } catch (err) {
-    console.error('复制升级程序失败:', err)
   }
 
   // 复制内置插件
@@ -254,57 +243,47 @@ module.exports = async function (context) {
 
   console.log('\n国际化文件清理完成!')
 
-  // 打包更新文件
-  try {
-    console.log('\n开始打包更新文件...')
-    const AdmZip = require('adm-zip')
-
-    // 确定 app.asar 路径
-    let asarPath = ''
-    let unpackedPath = ''
-
-    if (context.electronPlatformName === 'darwin') {
+  // 打包 macOS 增量更新文件
+  if (context.electronPlatformName === 'darwin') {
+    try {
+      console.log('\n开始打包更新文件...')
+      const AdmZip = require('adm-zip')
       const appName = context.packager.appInfo.productFilename
       const appPath = path.join(context.appOutDir, `${appName}.app`)
-      asarPath = path.join(appPath, 'Contents', 'Resources', 'app.asar')
-      unpackedPath = path.join(appPath, 'Contents', 'Resources', 'app.asar.unpacked')
-    } else {
-      asarPath = path.join(context.appOutDir, 'resources', 'app.asar')
-      unpackedPath = path.join(context.appOutDir, 'resources', 'app.asar.unpacked')
-    }
+      const asarPath = path.join(appPath, 'Contents', 'Resources', 'app.asar')
+      const unpackedPath = path.join(appPath, 'Contents', 'Resources', 'app.asar.unpacked')
 
-    if (await pathExists(asarPath)) {
-      // 输出路径
-      const version = context.packager.appInfo.version
-      const archName = context.arch === 3 || context.arch === 'arm64' ? 'arm64' : 'x64'
-      const platform = context.electronPlatformName
+      if (await pathExists(asarPath)) {
+        const version = context.packager.appInfo.version
+        const archName = context.arch === 3 || context.arch === 'arm64' ? 'arm64' : 'x64'
+        const platform = context.electronPlatformName
+        const outDir = path.dirname(context.appOutDir)
+        const zipName = `update-${platform}-${archName}-${version}.zip`
+        const zipPath = path.join(outDir, zipName)
 
-      const outDir = path.dirname(context.appOutDir)
-      const zipName = `update-${platform}-${archName}-${version}.zip`
-      const zipPath = path.join(outDir, zipName)
+        console.log('正在创建 zip...')
+        const zip = new AdmZip()
 
-      console.log('正在创建 zip...')
-      const zip = new AdmZip()
+        // 添加 app.asar 并重命名为 app.asar.tmp，避免覆盖中的文件锁问题
+        zip.addLocalFile(asarPath, '', 'app.asar.tmp')
+        console.log(`已添加 app.asar (重命名为 app.asar.tmp)`)
 
-      // 添加 app.asar 并重命名为 app.asar.tmp
-      zip.addLocalFile(asarPath, '', 'app.asar.tmp')
-      console.log(`已添加 app.asar (重命名为 app.asar.tmp)`)
+        if (await pathExists(unpackedPath)) {
+          zip.addLocalFolder(unpackedPath, 'app.asar.unpacked')
+          console.log(`已添加 app.asar.unpacked`)
+        }
 
-      if (await pathExists(unpackedPath)) {
-        zip.addLocalFolder(unpackedPath, 'app.asar.unpacked')
-        console.log(`已添加 app.asar.unpacked`)
+        zip.writeZip(zipPath)
+
+        const stats = await fs.stat(zipPath)
+        console.log(`更新包已生成: ${zipPath}`)
+        console.log(`Total size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`)
+      } else {
+        console.error(`未找到 app.asar: ${asarPath}`)
       }
-
-      zip.writeZip(zipPath)
-
-      const stats = await fs.stat(zipPath)
-      console.log(`更新包已生成: ${zipPath}`)
-      console.log(`Total size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`)
-    } else {
-      console.error(`未找到 app.asar: ${asarPath}`)
+    } catch (err) {
+      console.error('打包更新文件失败:', err)
     }
-  } catch (err) {
-    console.error('打包更新文件失败:', err)
   }
 }
 

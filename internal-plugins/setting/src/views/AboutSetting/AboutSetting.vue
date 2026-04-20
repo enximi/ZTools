@@ -32,7 +32,7 @@ async function handleCheckUpdate(): Promise<void> {
     if (result.hasUpdate) {
       const shouldUpdate = await confirm({
         title: '发现新版本',
-        message: `发现新版本 ${result.latestVersion}，是否立即更新？\n\n更新内容：\n${result.updateInfo?.releaseNotes || '无'}`,
+        message: `发现新版本 ${result.latestVersion}，是否立即更新？\n\n更新内容：\n${result.updateInfo?.releaseNotes || result.updateInfo?.changelog || '无'}`,
         type: 'info',
         confirmText: '立即更新',
         cancelText: '稍后'

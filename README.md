@@ -142,20 +142,18 @@ ZTools 支持应用内一键更新，无需手动下载安装包：
 **技术实现**：
 
 - 更新源：GitHub Releases（[ZTools](https://github.com/ZToolsCenter/ZTools/releases)）
-- 更新信息文件：`latest.yml`（包含版本号、更新日志等）
-- 更新包格式：ZIP 压缩包，命名格式为 `update-{platform}-{arch}-{version}.zip`
+- 更新信息文件：标准 `latest.yml`（Windows）和自定义更新元数据（macOS）
+- macOS 更新包格式：ZIP 压缩包，命名格式为 `update-{platform}-{arch}-{version}.zip`
   - 示例：`update-darwin-arm64-1.2.8.zip`（macOS Apple Silicon）
-  - 示例：`update-win32-x64-1.2.8.zip`（Windows x64）
-- 更新程序：独立的 `ztools-updater` 可执行文件
-  - macOS: `ztools-updater`（位于 Contents/MacOS/）
-  - Windows: `ztools-agent.exe`（位于应用根目录）
+- macOS 更新程序：独立的 `ztools-updater` 可执行文件（位于 `Contents/MacOS/`）
+- Windows 更新程序：`electron-updater` + NSIS 安装包
+  - 安装包示例：`ZTools-1.2.8-win-x64-setup.exe`
 - 更新流程：
-  1. 从 GitHub Releases 下载 `latest.yml` 获取最新版本信息
-  2. 下载对应平台的更新包
-  3. 解压并启动独立的 updater 程序
-  4. 应用退出
-  5. updater 替换 `app.asar` 文件
-  6. 自动重启应用
+  1. macOS：下载更新元数据并获取对应版本的增量 ZIP
+  2. macOS：启动独立 updater 替换 `app.asar` / `app.asar.unpacked`
+  3. Windows：读取 `latest.yml` 并下载完整 NSIS 安装包
+  4. Windows：退出应用并调用安装器完成升级
+  5. 升级完成后自动重新启动应用
 
 **平台支持**：
 

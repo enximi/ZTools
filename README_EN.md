@@ -142,20 +142,18 @@ ZTools supports one-click in-app updates without manual download:
 **Technical Implementation**:
 
 - Update source: GitHub Releases ([ZTools](https://github.com/ZToolsCenter/ZTools/releases))
-- Update info file: `latest.yml` (contains version number, changelog, etc.)
-- Update package format: ZIP archive with naming format `update-{platform}-{arch}-{version}.zip`
+- Update metadata: standard `latest.yml` on Windows and custom update metadata on macOS
+- macOS update package format: ZIP archive named `update-{platform}-{arch}-{version}.zip`
   - Example: `update-darwin-arm64-1.2.8.zip` (macOS Apple Silicon)
-  - Example: `update-win32-x64-1.2.8.zip` (Windows x64)
-- Updater program: Independent `ztools-updater` executable
-  - macOS: `ztools-updater` (located in Contents/MacOS/)
-  - Windows: `ztools-agent.exe` (located in app root directory)
+- macOS updater program: independent `ztools-updater` executable (located in `Contents/MacOS/`)
+- Windows updater: `electron-updater` + NSIS installer
+  - Installer example: `ZTools-1.2.8-win-x64-setup.exe`
 - Update flow:
-  1. Download `latest.yml` from GitHub Releases to get latest version info
-  2. Download update package for the corresponding platform
-  3. Extract and launch independent updater program
-  4. App exits
-  5. Updater replaces `app.asar` file
-  6. Automatically restarts app
+  1. macOS downloads update metadata and resolves the matching incremental ZIP
+  2. macOS launches the standalone updater to replace `app.asar` / `app.asar.unpacked`
+  3. Windows reads `latest.yml` and downloads the full NSIS installer
+  4. Windows exits the app and runs the installer to complete the upgrade
+  5. The app starts again after the upgrade finishes
 
 **Platform Support**:
 

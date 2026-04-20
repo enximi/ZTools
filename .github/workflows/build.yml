@@ -73,6 +73,15 @@ jobs:
             dist/*.zip
           if-no-files-found: warn
 
+      - name: Upload Windows update metadata
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifact-windows-metadata
+          path: |
+            dist/latest*.yml
+          if-no-files-found: warn
+
   release:
     name: Release
     needs: build
@@ -114,20 +123,26 @@ jobs:
           name: artifact-windows-latest-x64
           path: dist
 
-      # 生成更新信息和下载链接
-      - name: Generate update info
-        run: pnpm updater
+      - name: Download Windows update metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: artifact-windows-metadata
+          path: dist
 
-      # 只上传指定的三类文件到 Release
+      # 生成 Release Notes 和下载链接
+      - name: Generate release notes
+        run: pnpm release:notes
+
+      # 上传发布产物和 Windows 更新元数据
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          body_path: changelog.md
+          body_path: release-notes.md
           files: |
             dist/*.exe
             dist/*.dmg
             dist/*.zip
-            latest.yml
+            dist/latest*.yml
 
       # # 安装 ossutil
       # - name: Setup ossutil

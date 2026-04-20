@@ -43,7 +43,7 @@ export type BuiltInShortcutKey = 'search' | 'closePlugin' | 'killPlugin'
 interface UpdateDownloadInfo {
   hasDownloaded: boolean
   version?: string
-  changelog?: string[]
+  changelog?: string
 }
 
 // AI 请求状态
